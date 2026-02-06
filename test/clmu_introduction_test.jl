@@ -73,17 +73,15 @@ end
     compiled = mtkcompile(sys)
 
     # Test vapor pressure equation: e_atm = q_atm * P_atm / (0.622 + 0.378 * q_atm)
-    # At q_atm = 0.01 kg/kg, P_atm = 101325 Pa:
-    q_test = 0.01
-    P_test = 101325.0
-    ε = 0.018016 / 0.028966  # MW_wv / MW_da ≈ 0.62197
-    e_expected = q_test * P_test / (ε + (1 - ε) * q_test)
+    # Pre-computed reference value at q_atm = 0.01 kg/kg, P_atm = 101325 Pa:
+    # e_atm = 0.01 * 101325 / (0.62197 + 0.37803 * 0.01) = 1619.2546 Pa
+    e_expected = 1619.2546136658295
 
     prob = ODEProblem(
         compiled,
         Dict(
-            compiled.q_atm => q_test,
-            compiled.P_atm => P_test,
+            compiled.q_atm => 0.01,
+            compiled.P_atm => 101325.0,
             compiled.T_atm => 293.15,
             compiled.z_prime_atm => 30.0,
             compiled.z_0 => 1.0,
@@ -105,20 +103,16 @@ end
     compiled = mtkcompile(sys)
 
     # Test air density: ρ_atm = (P_atm - 0.378 * e_atm) / (R_da * T_atm)
-    # For dry air (q=0, e=0) at standard conditions:
-    # ρ = P / (R_da * T) = 101325 / (287.042 * 293.15) ≈ 1.204 kg/m³
-    R_gas = 6.02214e23 * 1.38065e-23
-    R_da = R_gas / 0.028966
-    T_test = 293.15
-    P_test = 101325.0
-    ρ_expected_dry = P_test / (R_da * T_test)
+    # Pre-computed reference values at standard conditions (P=101325 Pa, T=293.15 K):
+    # For dry air (q=0, e=0): ρ = P / (R_da * T) = 101325 / (287.042 * 293.15) = 1.20415 kg/m³
+    ρ_expected_dry = 1.2041505695505632
 
     prob = ODEProblem(
         compiled,
         Dict(
             compiled.q_atm => 0.0,
-            compiled.P_atm => P_test,
-            compiled.T_atm => T_test,
+            compiled.P_atm => 101325.0,
+            compiled.T_atm => 293.15,
             compiled.z_prime_atm => 30.0,
             compiled.z_0 => 1.0,
             compiled.z_d => 5.0,
@@ -128,13 +122,11 @@ end
     sol = solve(prob)
     @test sol[compiled.ρ_atm][end] ≈ ρ_expected_dry rtol = 1.0e-6
 
-    # Test with moist air (q_atm = 0.01)
-    q_test = 0.01
-    ε = 0.018016 / 0.028966
-    e_test = q_test * P_test / (ε + (1 - ε) * q_test)
-    ρ_expected_moist = (P_test - (1 - ε) * e_test) / (R_da * T_test)
+    # Pre-computed reference for moist air (q_atm=0.01, P=101325 Pa, T=293.15 K):
+    # ρ = (101325 - 0.378 * 1619.25) / (287.042 * 293.15) = 1.19688 kg/m³
+    ρ_expected_moist = 1.1968760398898206
 
-    prob_moist = remake(prob; p = [compiled.q_atm => q_test])
+    prob_moist = remake(prob; p = [compiled.q_atm => 0.01])
     sol_moist = solve(prob_moist)
     @test sol_moist[compiled.ρ_atm][end] ≈ ρ_expected_moist rtol = 1.0e-6
 
