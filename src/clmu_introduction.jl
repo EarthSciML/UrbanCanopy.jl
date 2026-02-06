@@ -37,8 +37,8 @@ Boulder, CO, 168 pp.
     @constants begin
         R_gas = N_A * κ_boltz, [description = "Universal gas constant R_gas = N_A * κ (Table 1.4)", unit = u"J/(K*mol)"]
         R_da = N_A * κ_boltz / MW_da, [description = "Dry air gas constant R_da = R_gas / MW_da (Table 1.4)", unit = u"J/(K*kg)"]
-        ε_ratio = MW_wv / MW_da, [description = "Ratio of molecular weights MW_wv/MW_da (dimensionless)"]
-        one_minus_ε = 1.0 - MW_wv / MW_da, [description = "1 - MW_wv/MW_da (dimensionless)"]
+        ε_ratio = MW_wv / MW_da, [description = "Ratio of molecular weights MW_wv/MW_da, ε = 0.622 (dimensionless)"]
+        one_minus_ε = 1.0 - MW_wv / MW_da, [description = "1 - MW_wv/MW_da = 0.378 (dimensionless)"]
     end
 
     # Atmospheric forcing inputs (Table 1.1)
