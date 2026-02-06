@@ -21,25 +21,24 @@ Boulder, CO, 168 pp.
 """
 @component function CLMUAtmosphere(; name = :CLMUAtmosphere)
 
-    # Physical constants (Table 1.4)
+    # Physical constants (Table 1.4, p. 25)
     # Note: Table 1.4 uses kmol as the mole unit. Here we convert to SI (mol):
     # N_A = 6.02214e26 /kmol = 6.02214e23 /mol
     # MW_da = 28.966 kg/kmol = 0.028966 kg/mol
     # MW_wv = 18.016 kg/kmol = 0.018016 kg/mol
     @constants begin
-        κ_boltz = 1.38065e-23, [description = "Boltzmann constant", unit = u"J/K"]
-        N_A = 6.02214e23, [description = "Avogadro's number", unit = u"mol^-1"]
-        MW_da = 0.028966, [description = "Molecular weight of dry air", unit = u"kg/mol"]
-        MW_wv = 0.018016, [description = "Molecular weight of water vapor", unit = u"kg/mol"]
+        κ_boltz = 1.38065e-23, [description = "Boltzmann constant (Table 1.4)", unit = u"J/K"]
+        N_A = 6.02214e23, [description = "Avogadro's number (Table 1.4)", unit = u"mol^-1"]
+        MW_da = 0.028966, [description = "Molecular weight of dry air (Table 1.4)", unit = u"kg/mol"]
+        MW_wv = 0.018016, [description = "Molecular weight of water vapor (Table 1.4)", unit = u"kg/mol"]
     end
 
-    # Derived constants
+    # Derived constants (Table 1.4, p. 25)
     @constants begin
-        R_gas = 6.02214e23 * 1.38065e-23, [description = "Universal gas constant (N_A * κ)", unit = u"J/(K*mol)"]
-        R_da = 6.02214e23 * 1.38065e-23 / 0.028966, [description = "Dry air gas constant (R_gas / MW_da)", unit = u"J/(K*kg)"]
-        R_wv = 6.02214e23 * 1.38065e-23 / 0.018016, [description = "Water vapor gas constant (R_gas / MW_wv)", unit = u"J/(K*kg)"]
-        ε_ratio = 0.018016 / 0.028966, [description = "Ratio of molecular weights MW_wv/MW_da (dimensionless)"]
-        one_minus_ε = 1.0 - 0.018016 / 0.028966, [description = "1 - MW_wv/MW_da (dimensionless)"]
+        R_gas = N_A * κ_boltz, [description = "Universal gas constant R_gas = N_A * κ (Table 1.4)", unit = u"J/(K*mol)"]
+        R_da = N_A * κ_boltz / MW_da, [description = "Dry air gas constant R_da = R_gas / MW_da (Table 1.4)", unit = u"J/(K*kg)"]
+        ε_ratio = MW_wv / MW_da, [description = "Ratio of molecular weights MW_wv/MW_da (dimensionless)"]
+        one_minus_ε = 1.0 - MW_wv / MW_da, [description = "1 - MW_wv/MW_da (dimensionless)"]
     end
 
     # Atmospheric forcing inputs (Table 1.1)
