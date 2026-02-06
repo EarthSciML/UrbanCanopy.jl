@@ -92,12 +92,12 @@ end
         (0.0, 1.0),
     )
     sol = solve(prob)
-    @test sol[compiled.e_atm][end] ≈ e_expected rtol = 1e-10
+    @test sol[compiled.e_atm][end] ≈ e_expected rtol = 1.0e-10
 
     # Additional check: dry air (q_atm = 0) should give e_atm = 0
     prob_dry = remake(prob; p = [compiled.q_atm => 0.0])
     sol_dry = solve(prob_dry)
-    @test sol_dry[compiled.e_atm][end] ≈ 0.0 atol = 1e-15
+    @test sol_dry[compiled.e_atm][end] ≈ 0.0 atol = 1.0e-15
 end
 
 @testitem "Equation Verification - Air Density" setup = [CLMUIntroSetup] tags = [:clmu_intro] begin
@@ -126,7 +126,7 @@ end
         (0.0, 1.0),
     )
     sol = solve(prob)
-    @test sol[compiled.ρ_atm][end] ≈ ρ_expected_dry rtol = 1e-6
+    @test sol[compiled.ρ_atm][end] ≈ ρ_expected_dry rtol = 1.0e-6
 
     # Test with moist air (q_atm = 0.01)
     q_test = 0.01
@@ -136,7 +136,7 @@ end
 
     prob_moist = remake(prob; p = [compiled.q_atm => q_test])
     sol_moist = solve(prob_moist)
-    @test sol_moist[compiled.ρ_atm][end] ≈ ρ_expected_moist rtol = 1e-6
+    @test sol_moist[compiled.ρ_atm][end] ≈ ρ_expected_moist rtol = 1.0e-6
 
     # Moist air should be less dense than dry air at same T and P
     @test sol_moist[compiled.ρ_atm][end] < sol[compiled.ρ_atm][end]
@@ -164,7 +164,7 @@ end
         (0.0, 1.0),
     )
     sol = solve(prob)
-    @test sol[compiled.z_atm][end] ≈ z_prime + z_0_val + z_d_val rtol = 1e-10
+    @test sol[compiled.z_atm][end] ≈ z_prime + z_0_val + z_d_val rtol = 1.0e-10
 end
 
 @testitem "Qualitative Properties" setup = [CLMUIntroSetup] tags = [:clmu_intro] begin

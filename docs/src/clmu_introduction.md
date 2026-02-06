@@ -43,7 +43,7 @@ sys = CLMUAtmosphere()
 vars = unknowns(sys)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [string(ModelingToolkit.get_unit(v)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
     :Description => [ModelingToolkit.getdescription(v) for v in vars]
 )
 ```
@@ -54,7 +54,7 @@ DataFrame(
 params = parameters(sys)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [string(ModelingToolkit.get_unit(p)) for p in params],
+    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
     :Description => [ModelingToolkit.getdescription(p) for p in params]
 )
 ```
@@ -64,6 +64,41 @@ DataFrame(
 ```@example clmu_intro
 eqs = equations(sys)
 ```
+
+### Table 1.1: Atmospheric Input to Urban Model
+
+The atmospheric model provides the following forcing variables to the urban model at each time step (Table 1.1, p. 16). The reference height ``z'_{atm}`` is the height above the surface defined as the roughness length ``z_0`` plus displacement height ``z_d``, so the reference height used for flux computations is ``z_{atm} = z'_{atm} + z_0 + z_d``.
+
+| Variable | Symbol | Units |
+|----------|--------|-------|
+| Reference height | ``z'_{atm}`` | m |
+| Zonal wind at ``z_{atm}`` | ``u_{atm}`` | m/s |
+| Meridional wind at ``z_{atm}`` | ``v_{atm}`` | m/s |
+| Potential temperature | ``\theta_{atm}`` | K |
+| Specific humidity at ``z_{atm}`` | ``q_{atm}`` | kg/kg |
+| Pressure at ``z_{atm}`` | ``P_{atm}`` | Pa |
+| Temperature at ``z_{atm}`` | ``T_{atm}`` | K |
+| Incident longwave radiation | ``L_{atm}\downarrow`` | W/m² |
+| Liquid precipitation | ``q_{rain}`` | kg/(m²·s) |
+| Solid precipitation | ``q_{sno}`` | kg/(m²·s) |
+| Direct beam visible solar radiation | ``S_{atm}\downarrow^{\mu}_{vis}`` | W/m² |
+| Direct beam near-infrared solar radiation | ``S_{atm}\downarrow^{\mu}_{nir}`` | W/m² |
+| Diffuse visible solar radiation | ``S_{atm}\downarrow_{vis}`` | W/m² |
+| Diffuse near-infrared solar radiation | ``S_{atm}\downarrow_{nir}`` | W/m² |
+
+### Table 1.4: Physical Constants
+
+Physical constants used by the CLMU, shared by all components of CCSM (Table 1.4, p. 25).
+
+| Constant | Symbol | Value | Units |
+|----------|--------|-------|-------|
+| Boltzmann constant | ``\kappa`` | 1.38065 × 10⁻²³ | J/K |
+| Avogadro's number | ``N_A`` | 6.02214 × 10²⁶ | molecule/kmol |
+| Universal gas constant | ``R_{gas}`` | ``N_A \kappa`` | J/(K·kmol) |
+| Molecular weight of dry air | ``MW_{da}`` | 28.966 | kg/kmol |
+| Dry air gas constant | ``R_{da}`` | ``R_{gas}/MW_{da}`` | J/(K·kg) |
+| Molecular weight of water vapor | ``MW_{wv}`` | 18.016 | kg/kmol |
+| Water vapor gas constant | ``R_{wv}`` | ``R_{gas}/MW_{wv}`` | J/(K·kg) |
 
 ## Analysis
 
