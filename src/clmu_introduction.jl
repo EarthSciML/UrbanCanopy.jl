@@ -22,20 +22,24 @@ Boulder, CO, 168 pp.
 @component function CLMUAtmosphere(; name = :CLMUAtmosphere)
 
     # Physical constants (Table 1.4)
+    # Note: Table 1.4 uses kmol as the mole unit. Here we convert to SI (mol):
+    # N_A = 6.02214e26 /kmol = 6.02214e23 /mol
+    # MW_da = 28.966 kg/kmol = 0.028966 kg/mol
+    # MW_wv = 18.016 kg/kmol = 0.018016 kg/mol
     @constants begin
         κ_boltz = 1.38065e-23, [description = "Boltzmann constant", unit = u"J/K"]
-        N_A = 6.02214e26, [description = "Avogadro's number", unit = u"mol^-1"]
-        MW_da = 28.966, [description = "Molecular weight of dry air", unit = u"kg/mol"]
-        MW_wv = 18.016, [description = "Molecular weight of water vapor", unit = u"kg/mol"]
+        N_A = 6.02214e23, [description = "Avogadro's number", unit = u"mol^-1"]
+        MW_da = 0.028966, [description = "Molecular weight of dry air", unit = u"kg/mol"]
+        MW_wv = 0.018016, [description = "Molecular weight of water vapor", unit = u"kg/mol"]
     end
 
     # Derived constants
     @constants begin
-        R_gas = 6.02214e26 * 1.38065e-23, [description = "Universal gas constant (N_A * κ)", unit = u"J/(K*mol)"]
-        R_da = 6.02214e26 * 1.38065e-23 / 28.966, [description = "Dry air gas constant (R_gas / MW_da)", unit = u"J/(K*kg)"]
-        R_wv = 6.02214e26 * 1.38065e-23 / 18.016, [description = "Water vapor gas constant (R_gas / MW_wv)", unit = u"J/(K*kg)"]
-        ε_ratio = 18.016 / 28.966, [description = "Ratio of molecular weights MW_wv/MW_da (dimensionless)"]
-        one_minus_ε = 1.0 - 18.016 / 28.966, [description = "1 - MW_wv/MW_da (dimensionless)"]
+        R_gas = 6.02214e23 * 1.38065e-23, [description = "Universal gas constant (N_A * κ)", unit = u"J/(K*mol)"]
+        R_da = 6.02214e23 * 1.38065e-23 / 0.028966, [description = "Dry air gas constant (R_gas / MW_da)", unit = u"J/(K*kg)"]
+        R_wv = 6.02214e23 * 1.38065e-23 / 0.018016, [description = "Water vapor gas constant (R_gas / MW_wv)", unit = u"J/(K*kg)"]
+        ε_ratio = 0.018016 / 0.028966, [description = "Ratio of molecular weights MW_wv/MW_da (dimensionless)"]
+        one_minus_ε = 1.0 - 0.018016 / 0.028966, [description = "1 - MW_wv/MW_da (dimensionless)"]
     end
 
     # Atmospheric forcing inputs (Table 1.1)

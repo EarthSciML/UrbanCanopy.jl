@@ -86,12 +86,78 @@ The atmospheric model provides the following forcing variables to the urban mode
 | Diffuse visible solar radiation | ``S_{atm}\downarrow_{vis}`` | W/m² |
 | Diffuse near-infrared solar radiation | ``S_{atm}\downarrow_{nir}`` | W/m² |
 
+### Table 1.2: Urban Model Output to Atmospheric Model
+
+The urban model provides the following area-averaged fluxes to the atmospheric model (Table 1.2, p. 18).
+
+| Variable | Symbol | Units |
+|----------|--------|-------|
+| Latent heat flux | ``\lambda E`` | W/m² |
+| Sensible heat flux | ``H`` | W/m² |
+| Water vapor flux | ``E`` | mm/s |
+| Zonal momentum flux | ``\tau_x`` | kg/(m·s²) |
+| Meridional momentum flux | ``\tau_y`` | kg/(m·s²) |
+| Emitted longwave radiation | ``L\uparrow`` | W/m² |
+| Direct beam visible albedo | ``I\uparrow^{\mu}_{vis}`` | - |
+| Direct beam near-infrared albedo | ``I\uparrow^{\mu}_{nir}`` | - |
+| Diffuse visible albedo | ``I\uparrow_{vis}`` | - |
+| Diffuse near-infrared albedo | ``I\uparrow_{nir}`` | - |
+| Absorbed solar radiation | ``\vec{S}`` | W/m² |
+| Radiative temperature | ``T_{rad}`` | K |
+| Temperature at 2 meter height | ``T_{2m}`` | K |
+| Specific humidity at 2 meter height | ``q_{2m}`` | kg/kg |
+| Snow water equivalent | ``W_{sno}`` | m |
+| Aerodynamic resistance | ``r_{am}`` | s/m |
+| Friction velocity | ``u_*`` | m/s |
+
+Note: ``\lambda`` is either the latent heat of vaporization ``\lambda_{vap}`` or latent heat of sublimation ``\lambda_{sub}`` (Table 1.4) depending on the thermal state of surface water on the roof, pervious and impervious road. Dust flux and net ecosystem exchange are set to zero for urban areas.
+
+### Table 1.3: Input Data Required for the Urban Model
+
+Required input data for urban landunits are listed in Table 1.3 (p. 23). This data is provided by the surface dataset at the required spatial resolution.
+
+| Data | Symbol | Units |
+|------|--------|-------|
+| Percent urban | - | % |
+| Canyon height to width ratio | ``H/W`` | - |
+| Roof fraction | ``W_{roof}`` | - |
+| Pervious road fraction | ``f_{prvrd}`` | - |
+| Emissivity of roof | ``\varepsilon_{roof}`` | - |
+| Emissivity of impervious road | ``\varepsilon_{imprvrd}`` | - |
+| Emissivity of pervious road | ``\varepsilon_{prvrd}`` | - |
+| Emissivity of walls | ``\varepsilon_{wall}`` | - |
+| Building height | ``H`` | m |
+| Roof albedo (visible direct/diffuse, near-infrared direct/diffuse) | ``\alpha_{roof}`` | - |
+| Wall albedo (visible direct/diffuse, near-infrared direct/diffuse) | ``\alpha_{walls}`` | - |
+| Impervious road albedo (visible direct/diffuse, near-infrared direct/diffuse) | ``\alpha_{imprvrd}`` | - |
+| Pervious road albedo (visible direct/diffuse, near-infrared direct/diffuse) | ``\alpha_{prvrd}`` | - |
+| Roof thermal conductivity | ``\lambda_{roof,i}`` | W/(m·K) |
+| Wall thermal conductivity | ``\lambda_{wall,i}`` | W/(m·K) |
+| Impervious road thermal conductivity | ``\lambda_{imprvrd,i}`` | W/(m·K) |
+| Pervious road thermal conductivity | ``\lambda_{prvrd,i}`` | W/(m·K) |
+| Roof volumetric heat capacity | ``c_{roof,i}`` | J/(m³·K) |
+| Wall volumetric heat capacity | ``c_{wall,i}`` | J/(m³·K) |
+| Impervious road volumetric heat capacity | ``c_{imprvrd,i}`` | J/(m³·K) |
+| Pervious road volumetric heat capacity | ``c_{prvrd,i}`` | J/(m³·K) |
+| Maximum interior building temperature | ``T_{iB,max}`` | K |
+| Minimum interior building temperature | ``T_{iB,min}`` | K |
+| Height of wind source in canyon | ``H_w`` | m |
+| Number of impervious road layers | ``N_{imprvrd}`` | - |
+| Wall thickness | ``\Delta z_{wall}`` | m |
+| Roof thickness | ``\Delta z_{roof}`` | m |
+| Percent sand, percent clay of pervious road (soil) | %sand, %clay | % |
+| Grid cell latitude and longitude | ``\phi, \theta`` | degrees |
+
 ### Table 1.4: Physical Constants
 
 Physical constants used by the CLMU, shared by all components of CCSM (Table 1.4, p. 25).
 
 | Constant | Symbol | Value | Units |
 |----------|--------|-------|-------|
+| Pi | ``\pi`` | 3.14159265358979323846 | - |
+| Acceleration of gravity | ``g`` | 9.80616 | m/s² |
+| Standard pressure | ``P_{std}`` | 101325 | Pa |
+| Stefan-Boltzmann constant | ``\sigma`` | 5.67 × 10⁻⁸ | W/(m²·K⁴) |
 | Boltzmann constant | ``\kappa`` | 1.38065 × 10⁻²³ | J/K |
 | Avogadro's number | ``N_A`` | 6.02214 × 10²⁶ | molecule/kmol |
 | Universal gas constant | ``R_{gas}`` | ``N_A \kappa`` | J/(K·kmol) |
@@ -99,6 +165,20 @@ Physical constants used by the CLMU, shared by all components of CCSM (Table 1.4
 | Dry air gas constant | ``R_{da}`` | ``R_{gas}/MW_{da}`` | J/(K·kg) |
 | Molecular weight of water vapor | ``MW_{wv}`` | 18.016 | kg/kmol |
 | Water vapor gas constant | ``R_{wv}`` | ``R_{gas}/MW_{wv}`` | J/(K·kg) |
+| Von Karman constant | ``k`` | 0.4 | - |
+| Freezing temperature of fresh water | ``T_f`` | 273.15 | K |
+| Density of liquid water | ``\rho_{liq}`` | 1000 | kg/m³ |
+| Density of ice | ``\rho_{ice}`` | 917 | kg/m³ |
+| Specific heat capacity of dry air | ``C_p`` | 1.00464 × 10³ | J/(kg·K) |
+| Specific heat capacity of water | ``C_{liq}`` | 4.188 × 10³ | J/(kg·K) |
+| Specific heat capacity of ice | ``C_{ice}`` | 2.11727 × 10³ | J/(kg·K) |
+| Latent heat of vaporization | ``\lambda_{vap}`` | 2.501 × 10⁶ | J/kg |
+| Latent heat of fusion | ``L_f`` | 3.337 × 10⁵ | J/kg |
+| Latent heat of sublimation | ``\lambda_{sub}`` | ``\lambda_{vap} + L_f`` | J/kg |
+| Thermal conductivity of water | ``\lambda_{liq}`` | 0.6 | W/(m·K) |
+| Thermal conductivity of ice | ``\lambda_{ice}`` | 2.29 | W/(m·K) |
+| Thermal conductivity of air | ``\lambda_{air}`` | 0.023 | W/(m·K) |
+| Radius of the earth | ``R_e`` | 6.37122 × 10⁶ | m |
 
 ## Analysis
 
