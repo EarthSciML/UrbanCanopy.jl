@@ -85,6 +85,11 @@ The atmospheric model provides the following forcing variables to the urban mode
 | Direct beam near-infrared solar radiation | ``S_{atm}\downarrow^{\mu}_{nir}`` | W/m² |
 | Diffuse visible solar radiation | ``S_{atm}\downarrow_{vis}`` | W/m² |
 | Diffuse near-infrared solar radiation | ``S_{atm}\downarrow_{nir}`` | W/m² |
+| Carbon dioxide (CO₂) concentration | ``c_a`` | ppmv |
+| Aerosol deposition rate | ``D_{sp}`` | kg/(m²·s) |
+| Nitrogen deposition rate | ``NF_{ndep\_sminn}`` | g(N)/(m²·yr) |
+
+Note: CO₂ concentration, aerosol deposition rate, and nitrogen deposition rate are provided by the atmospheric model but not used by the urban model.
 
 ### Table 1.2: Urban Model Output to Atmospheric Model
 
@@ -109,6 +114,8 @@ The urban model provides the following area-averaged fluxes to the atmospheric m
 | Snow water equivalent | ``W_{sno}`` | m |
 | Aerodynamic resistance | ``r_{am}`` | s/m |
 | Friction velocity | ``u_*`` | m/s |
+| Dust flux | ``F_j`` | kg/(m²·s) |
+| Net ecosystem exchange | ``NEE`` | kgCO₂/(m²·s) |
 
 Note: ``\lambda`` is either the latent heat of vaporization ``\lambda_{vap}`` or latent heat of sublimation ``\lambda_{sub}`` (Table 1.4) depending on the thermal state of surface water on the roof, pervious and impervious road. Dust flux and net ecosystem exchange are set to zero for urban areas.
 
