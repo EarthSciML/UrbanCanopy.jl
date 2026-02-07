@@ -1,5 +1,5 @@
 % Statistics for EarthSciML/UrbanCanopy.jl
-% Generated for [EarthSciML/UrbanCanopy.jl](https://github.com/EarthSciML/UrbanCanopy.jl) with [jgehrcke/github-repo-stats](https://github.com/jgehrcke/github-repo-stats) at 2026-02-06 23:32 UTC.
+% Generated for [EarthSciML/UrbanCanopy.jl](https://github.com/EarthSciML/UrbanCanopy.jl) with [jgehrcke/github-repo-stats](https://github.com/jgehrcke/github-repo-stats) at 2026-02-07 23:36 UTC.
 
 
 ## Views
