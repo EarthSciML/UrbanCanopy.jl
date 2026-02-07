@@ -14,6 +14,7 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "CLMU Introduction" => "clmu_introduction.md",
+        "Albedos and Radiative Fluxes" => "albedos_radiative_fluxes.md",
         "API" => "api.md",
     ],
 )
