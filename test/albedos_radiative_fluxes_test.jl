@@ -51,16 +51,20 @@ end
     @test length(parameters(sys)) == 31
 
     unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
-    for name in ["Ψ_wall_sky", "Ψ_road_sky", "Ψ_wall_wall", "Ψ_road_wall",
-                  "S_net_roof", "S_net_road", "S_net_sunwall", "S_net_shdwall",
-                  "L_net_roof", "L_net_road", "L_net_total", "α_uc_dir_vis"]
+    for name in [
+            "Ψ_wall_sky", "Ψ_road_sky", "Ψ_wall_wall", "Ψ_road_wall",
+            "S_net_roof", "S_net_road", "S_net_sunwall", "S_net_shdwall",
+            "L_net_roof", "L_net_road", "L_net_total", "α_uc_dir_vis",
+        ]
         @test name in unk_names
     end
 
     param_names = Set(string(Symbolics.tosymbol(p, escape = false)) for p in parameters(sys))
-    for name in ["H_W", "W_roof", "S_atm_dir_vis", "L_atm_down", "μ_zen",
-                  "α_roof_dir_vis", "α_road_dir_vis", "α_wall_dir_vis",
-                  "ε_roof", "ε_road", "ε_wall", "T_roof", "T_road"]
+    for name in [
+            "H_W", "W_roof", "S_atm_dir_vis", "L_atm_down", "μ_zen",
+            "α_roof_dir_vis", "α_road_dir_vis", "α_wall_dir_vis",
+            "ε_roof", "ε_road", "ε_wall", "T_roof", "T_road",
+        ]
         @test name in param_names
     end
 
@@ -81,23 +85,23 @@ end
     ψ_rw_expected = (1 - ψ_rs_expected) / 2
     ψ_ww_expected = 1 - 2 * ψ_ws_expected
 
-    @test sol[compiled.Ψ_wall_sky][end] ≈ ψ_ws_expected rtol = 1e-10
-    @test sol[compiled.Ψ_road_sky][end] ≈ ψ_rs_expected rtol = 1e-10
-    @test sol[compiled.Ψ_road_wall][end] ≈ ψ_rw_expected rtol = 1e-10
-    @test sol[compiled.Ψ_wall_wall][end] ≈ ψ_ww_expected rtol = 1e-10
+    @test sol[compiled.Ψ_wall_sky][end] ≈ ψ_ws_expected rtol = 1.0e-10
+    @test sol[compiled.Ψ_road_sky][end] ≈ ψ_rs_expected rtol = 1.0e-10
+    @test sol[compiled.Ψ_road_wall][end] ≈ ψ_rw_expected rtol = 1.0e-10
+    @test sol[compiled.Ψ_wall_wall][end] ≈ ψ_ww_expected rtol = 1.0e-10
 
     # View factors from wall sum to 1
     @test sol[compiled.Ψ_wall_sky][end] + sol[compiled.Ψ_wall_road][end] +
-          sol[compiled.Ψ_wall_wall][end] ≈ 1.0 rtol = 1e-10
+        sol[compiled.Ψ_wall_wall][end] ≈ 1.0 rtol = 1.0e-10
 
     # View factors from road sum to 1
-    @test sol[compiled.Ψ_road_sky][end] + 2 * sol[compiled.Ψ_road_wall][end] ≈ 1.0 rtol = 1e-10
+    @test sol[compiled.Ψ_road_sky][end] + 2 * sol[compiled.Ψ_road_wall][end] ≈ 1.0 rtol = 1.0e-10
 
     # Symmetry: Ψ_wall_sky = Ψ_wall_road (Eq. 2.26)
-    @test sol[compiled.Ψ_wall_sky][end] ≈ sol[compiled.Ψ_wall_road][end] rtol = 1e-10
+    @test sol[compiled.Ψ_wall_sky][end] ≈ sol[compiled.Ψ_wall_road][end] rtol = 1.0e-10
 
     # Symmetry: Ψ_road_sky = Ψ_sky_road (Eq. 2.25)
-    @test sol[compiled.Ψ_road_sky][end] ≈ sol[compiled.Ψ_sky_road][end] rtol = 1e-10
+    @test sol[compiled.Ψ_road_sky][end] ≈ sol[compiled.Ψ_sky_road][end] rtol = 1.0e-10
 end
 
 @testitem "View Factors - Limiting Behaviors" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -152,8 +156,8 @@ end
 
     # Roof absorbed = Σ S_atm*(1-α) (Eqs. 2.34-2.35)
     expected = 200.0 * (1 - 0.2) + 150.0 * (1 - 0.2) +
-               80.0 * (1 - 0.2) + 60.0 * (1 - 0.2)
-    @test sol[compiled.S_net_roof][end] ≈ expected rtol = 1e-10
+        80.0 * (1 - 0.2) + 60.0 * (1 - 0.2)
+    @test sol[compiled.S_net_roof][end] ≈ expected rtol = 1.0e-10
 end
 
 @testitem "Energy Conservation - Solar" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -165,25 +169,33 @@ end
 
     # For each waveband: incident = absorbed + reflected
     for (net_road, net_sw, net_sh, refl, s_road, s_sw, s_sh) in [
-        (compiled.S_net_road_dir_vis, compiled.S_net_sunwall_dir_vis,
-         compiled.S_net_shdwall_dir_vis, compiled.S_refl_sky_dir_vis,
-         compiled.S_road_dir_vis, compiled.S_sunwall_dir_vis, nothing),
-        (compiled.S_net_road_dir_nir, compiled.S_net_sunwall_dir_nir,
-         compiled.S_net_shdwall_dir_nir, compiled.S_refl_sky_dir_nir,
-         compiled.S_road_dir_nir, compiled.S_sunwall_dir_nir, nothing),
-        (compiled.S_net_road_dif_vis, compiled.S_net_sunwall_dif_vis,
-         compiled.S_net_shdwall_dif_vis, compiled.S_refl_sky_dif_vis,
-         compiled.S_road_dif_vis, compiled.S_wall_dif_vis, compiled.S_wall_dif_vis),
-        (compiled.S_net_road_dif_nir, compiled.S_net_sunwall_dif_nir,
-         compiled.S_net_shdwall_dif_nir, compiled.S_refl_sky_dif_nir,
-         compiled.S_road_dif_nir, compiled.S_wall_dif_nir, compiled.S_wall_dif_nir),
-    ]
+            (
+                compiled.S_net_road_dir_vis, compiled.S_net_sunwall_dir_vis,
+                compiled.S_net_shdwall_dir_vis, compiled.S_refl_sky_dir_vis,
+                compiled.S_road_dir_vis, compiled.S_sunwall_dir_vis, nothing,
+            ),
+            (
+                compiled.S_net_road_dir_nir, compiled.S_net_sunwall_dir_nir,
+                compiled.S_net_shdwall_dir_nir, compiled.S_refl_sky_dir_nir,
+                compiled.S_road_dir_nir, compiled.S_sunwall_dir_nir, nothing,
+            ),
+            (
+                compiled.S_net_road_dif_vis, compiled.S_net_sunwall_dif_vis,
+                compiled.S_net_shdwall_dif_vis, compiled.S_refl_sky_dif_vis,
+                compiled.S_road_dif_vis, compiled.S_wall_dif_vis, compiled.S_wall_dif_vis,
+            ),
+            (
+                compiled.S_net_road_dif_nir, compiled.S_net_sunwall_dif_nir,
+                compiled.S_net_shdwall_dif_nir, compiled.S_refl_sky_dif_nir,
+                compiled.S_road_dif_nir, compiled.S_wall_dif_nir, compiled.S_wall_dif_nir,
+            ),
+        ]
         incident = sol[s_road][end] + sol[s_sw][end] * hw
         if s_sh !== nothing
             incident += sol[s_sh][end] * hw
         end
         absorbed = sol[net_road][end] + (sol[net_sw][end] + sol[net_sh][end]) * hw
-        @test incident ≈ absorbed + sol[refl][end] rtol = 1e-8
+        @test incident ≈ absorbed + sol[refl][end] rtol = 1.0e-8
     end
 end
 
@@ -195,9 +207,9 @@ end
 
     σ = 5.67e-8
     L_up_expected = 0.9 * σ * 305.0^4 + 0.1 * 350.0
-    @test sol[compiled.L_up_roof][end] ≈ L_up_expected rtol = 1e-8
+    @test sol[compiled.L_up_roof][end] ≈ L_up_expected rtol = 1.0e-8
 
-    @test sol[compiled.L_net_roof][end] ≈ L_up_expected - 350.0 rtol = 1e-8
+    @test sol[compiled.L_net_roof][end] ≈ L_up_expected - 350.0 rtol = 1.0e-8
 end
 
 @testitem "Canyon Albedo Decreases with H/W" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -215,8 +227,8 @@ end
     end
 
     # Monotonically decreasing (radiation trapping, Figure 2.6)
-    for i in 1:length(albedos)-1
-        @test albedos[i] > albedos[i+1]
+    for i in 1:(length(albedos) - 1)
+        @test albedos[i] > albedos[i + 1]
     end
 
     for α in albedos
@@ -276,11 +288,11 @@ end
     params[compiled.T_shdwall] = 310.0
     sol = solve_system(compiled, params)
 
-    @test sol[compiled.L_emit_sunwall][end] ≈ sol[compiled.L_emit_shdwall][end] rtol = 1e-10
-    @test sol[compiled.L_net_sunwall][end] ≈ sol[compiled.L_net_shdwall][end] rtol = 1e-8
+    @test sol[compiled.L_emit_sunwall][end] ≈ sol[compiled.L_emit_shdwall][end] rtol = 1.0e-10
+    @test sol[compiled.L_net_sunwall][end] ≈ sol[compiled.L_net_shdwall][end] rtol = 1.0e-8
 
     # For diffuse solar, both walls receive equal radiation → equal absorption
-    @test sol[compiled.S_net_sunwall_dif_vis][end] ≈ sol[compiled.S_net_shdwall_dif_vis][end] rtol = 1e-8
+    @test sol[compiled.S_net_sunwall_dif_vis][end] ≈ sol[compiled.S_net_shdwall_dif_vis][end] rtol = 1.0e-8
 end
 
 @testitem "Shaded Wall Gets No Direct Beam" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -298,7 +310,7 @@ end
     params_black[compiled.α_wall_dir_vis] = 0.0
     params_black[compiled.α_road_dir_vis] = 0.0
     sol_black = solve_system(compiled, params_black)
-    @test sol_black[compiled.S_net_shdwall_dir_vis][end] ≈ 0.0 atol = 1e-10
+    @test sol_black[compiled.S_net_shdwall_dir_vis][end] ≈ 0.0 atol = 1.0e-10
 end
 
 @testitem "Total Net Radiation" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -309,12 +321,12 @@ end
 
     w_roof = 0.25
     expected_solar = w_roof * sol[compiled.S_net_roof][end] +
-                     (1 - w_roof) * sol[compiled.S_net_uc][end]
-    @test sol[compiled.S_net_total][end] ≈ expected_solar rtol = 1e-8
+        (1 - w_roof) * sol[compiled.S_net_uc][end]
+    @test sol[compiled.S_net_total][end] ≈ expected_solar rtol = 1.0e-8
 
     expected_lw = w_roof * sol[compiled.L_net_roof][end] +
-                  (1 - w_roof) * sol[compiled.L_net_uc][end]
-    @test sol[compiled.L_net_total][end] ≈ expected_lw rtol = 1e-8
+        (1 - w_roof) * sol[compiled.L_net_uc][end]
+    @test sol[compiled.L_net_total][end] ≈ expected_lw rtol = 1.0e-8
 end
 
 @testitem "Zero Albedo - Full Absorption" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -332,20 +344,22 @@ end
     sol = solve_system(compiled, params)
 
     # All canyon reflected to sky should be zero
-    @test sol[compiled.S_refl_sky_dir_vis][end] ≈ 0.0 atol = 1e-10
-    @test sol[compiled.S_refl_sky_dif_vis][end] ≈ 0.0 atol = 1e-10
+    @test sol[compiled.S_refl_sky_dir_vis][end] ≈ 0.0 atol = 1.0e-10
+    @test sol[compiled.S_refl_sky_dif_vis][end] ≈ 0.0 atol = 1.0e-10
 
     # Canyon albedos should be zero
-    @test sol[compiled.α_uc_dif_vis][end] ≈ 0.0 atol = 1e-10
+    @test sol[compiled.α_uc_dif_vis][end] ≈ 0.0 atol = 1.0e-10
 
     # Total absorbed = total incident for direct VIS
     hw = params[compiled.H_W]
     total_incident = sol[compiled.S_road_dir_vis][end] +
-                     sol[compiled.S_sunwall_dir_vis][end] * hw
+        sol[compiled.S_sunwall_dir_vis][end] * hw
     total_absorbed = sol[compiled.S_net_road_dir_vis][end] +
-                     (sol[compiled.S_net_sunwall_dir_vis][end] +
-                      sol[compiled.S_net_shdwall_dir_vis][end]) * hw
-    @test total_absorbed ≈ total_incident rtol = 1e-10
+        (
+        sol[compiled.S_net_sunwall_dir_vis][end] +
+            sol[compiled.S_net_shdwall_dir_vis][end]
+    ) * hw
+    @test total_absorbed ≈ total_incident rtol = 1.0e-10
 end
 
 @testitem "Road Net LW Decreases with H/W" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
@@ -374,8 +388,8 @@ end
     end
 
     # Net LW for road decreases with H/W (more LW from warm walls reduces net loss)
-    for i in 1:length(net_lw_road)-1
-        @test net_lw_road[i+1] < net_lw_road[i]
+    for i in 1:(length(net_lw_road) - 1)
+        @test net_lw_road[i + 1] < net_lw_road[i]
     end
 end
 
@@ -392,5 +406,5 @@ end
     end
 
     # Roof LW is independent of canyon geometry
-    @test all(x -> isapprox(x, net_lw_roof[1], rtol = 1e-10), net_lw_roof)
+    @test all(x -> isapprox(x, net_lw_roof[1], rtol = 1.0e-10), net_lw_roof)
 end

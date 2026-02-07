@@ -202,12 +202,18 @@ Boulder, CO, 168 pp. Chapter 2: Albedos and Radiative Fluxes (pp. 26-60).
 
     # ===== Direct Beam Solar (Section 2.2, Eqs. 2.11, 2.14-2.17) =====
     push!(eqs, θ_0 ~ asin(min(1 / (H_W * tan(μ_zen / one_rad)), 1)) * one_rad) # Eq. 2.11
-    push!(eqs, S_sunwall_factor ~ 2 * ((1 / H_W) * (1 / 2 - θ_0 / (π_val * one_rad)) +  # Eq. 2.16
-        (1 / π_val) * tan(μ_zen / one_rad) * (1 - cos(θ_0 / one_rad))))
+    push!(
+        eqs, S_sunwall_factor ~ 2 * (
+            (1 / H_W) * (1 / 2 - θ_0 / (π_val * one_rad)) +  # Eq. 2.16
+                (1 / π_val) * tan(μ_zen / one_rad) * (1 - cos(θ_0 / one_rad))
+        )
+    )
     push!(eqs, S_sunwall_dir_vis ~ S_sunwall_factor * S_atm_dir_vis)
     push!(eqs, S_sunwall_dir_nir ~ S_sunwall_factor * S_atm_dir_nir)
-    push!(eqs, S_road_factor ~ 2 * θ_0 / (π_val * one_rad) -                             # Eq. 2.17
-        (2 / π_val) * H_W * tan(μ_zen / one_rad) * (1 - cos(θ_0 / one_rad)))
+    push!(
+        eqs, S_road_factor ~ 2 * θ_0 / (π_val * one_rad) -                             # Eq. 2.17
+            (2 / π_val) * H_W * tan(μ_zen / one_rad) * (1 - cos(θ_0 / one_rad))
+    )
     push!(eqs, S_road_dir_vis ~ S_road_factor * S_atm_dir_vis)
     push!(eqs, S_road_dir_nir ~ S_road_factor * S_atm_dir_nir)
 
@@ -218,10 +224,12 @@ Boulder, CO, 168 pp. Chapter 2: Albedos and Radiative Fluxes (pp. 26-60).
     push!(eqs, S_wall_dif_nir ~ S_atm_dif_nir * Ψ_sky_wall)
 
     # ===== Roof Absorbed Solar (Eqs. 2.34-2.35) =====
-    push!(eqs, S_net_roof ~ S_atm_dir_vis * (1 - α_roof_dir_vis) +
-                            S_atm_dir_nir * (1 - α_roof_dir_nir) +
-                            S_atm_dif_vis * (1 - α_roof_dif_vis) +
-                            S_atm_dif_nir * (1 - α_roof_dif_nir))
+    push!(
+        eqs, S_net_roof ~ S_atm_dir_vis * (1 - α_roof_dir_vis) +
+            S_atm_dir_nir * (1 - α_roof_dir_nir) +
+            S_atm_dif_vis * (1 - α_roof_dif_vis) +
+            S_atm_dif_nir * (1 - α_roof_dif_nir)
+    )
 
     # ===== Canyon Multi-Reflection Solar (Section 2.5, closed-form) =====
     # The iterative multi-reflection (Eqs. 2.63-2.85) is equivalent to the
@@ -236,21 +244,31 @@ Boulder, CO, 168 pp. Chapter 2: Albedos and Radiative Fluxes (pp. 26-60).
     #             [c(1+d),  1-bc,   d+bc  ],
     #             [c(1+d),  d+bc,   1-bc  ]]
     #   M^{-1} = adj(M) / det(M)
-    for (a_r, a_w, S_r, S_sw, S_sh, det_var,
-         net_road, net_sw, net_sh, refl_sky) in [
-        (α_road_dir_vis, α_wall_dir_vis, S_road_dir_vis, S_sunwall_dir_vis, zero_wm2,
-         det_dir_vis,
-         S_net_road_dir_vis, S_net_sunwall_dir_vis, S_net_shdwall_dir_vis, S_refl_sky_dir_vis),
-        (α_road_dir_nir, α_wall_dir_nir, S_road_dir_nir, S_sunwall_dir_nir, zero_wm2,
-         det_dir_nir,
-         S_net_road_dir_nir, S_net_sunwall_dir_nir, S_net_shdwall_dir_nir, S_refl_sky_dir_nir),
-        (α_road_dif_vis, α_wall_dif_vis, S_road_dif_vis, S_wall_dif_vis, S_wall_dif_vis,
-         det_dif_vis,
-         S_net_road_dif_vis, S_net_sunwall_dif_vis, S_net_shdwall_dif_vis, S_refl_sky_dif_vis),
-        (α_road_dif_nir, α_wall_dif_nir, S_road_dif_nir, S_wall_dif_nir, S_wall_dif_nir,
-         det_dif_nir,
-         S_net_road_dif_nir, S_net_sunwall_dif_nir, S_net_shdwall_dif_nir, S_refl_sky_dif_nir),
-    ]
+    for (
+            a_r, a_w, S_r, S_sw, S_sh, det_var,
+            net_road, net_sw, net_sh, refl_sky,
+        ) in [
+            (
+                α_road_dir_vis, α_wall_dir_vis, S_road_dir_vis, S_sunwall_dir_vis, zero_wm2,
+                det_dir_vis,
+                S_net_road_dir_vis, S_net_sunwall_dir_vis, S_net_shdwall_dir_vis, S_refl_sky_dir_vis,
+            ),
+            (
+                α_road_dir_nir, α_wall_dir_nir, S_road_dir_nir, S_sunwall_dir_nir, zero_wm2,
+                det_dir_nir,
+                S_net_road_dir_nir, S_net_sunwall_dir_nir, S_net_shdwall_dir_nir, S_refl_sky_dir_nir,
+            ),
+            (
+                α_road_dif_vis, α_wall_dif_vis, S_road_dif_vis, S_wall_dif_vis, S_wall_dif_vis,
+                det_dif_vis,
+                S_net_road_dif_vis, S_net_sunwall_dif_vis, S_net_shdwall_dif_vis, S_refl_sky_dif_vis,
+            ),
+            (
+                α_road_dif_nir, α_wall_dif_nir, S_road_dif_nir, S_wall_dif_nir, S_wall_dif_nir,
+                det_dif_nir,
+                S_net_road_dif_nir, S_net_sunwall_dif_nir, S_net_shdwall_dif_nir, S_refl_sky_dif_nir,
+            ),
+        ]
         local b = a_w * T_rw
         local c = a_r * T_wr
         local d = a_w * T_ww
@@ -268,34 +286,54 @@ Boulder, CO, 168 pp. Chapter 2: Albedos and Radiative Fluxes (pp. 26-60).
         push!(eqs, net_sh ~ (1 - a_w) * Q_sh)
 
         # Reflected to sky = incident - absorbed (energy conservation)
-        push!(eqs, refl_sky ~ (S_r + (S_sw + S_sh) * H_W) -
-                              (net_road + (net_sw + net_sh) * H_W))
+        push!(
+            eqs, refl_sky ~ (S_r + (S_sw + S_sh) * H_W) -
+                (net_road + (net_sw + net_sh) * H_W)
+        )
     end
 
     # Sum absorbed solar by surface
-    push!(eqs, S_net_road ~ S_net_road_dir_vis + S_net_road_dir_nir +
-                            S_net_road_dif_vis + S_net_road_dif_nir)
-    push!(eqs, S_net_sunwall ~ S_net_sunwall_dir_vis + S_net_sunwall_dir_nir +
-                               S_net_sunwall_dif_vis + S_net_sunwall_dif_nir)
-    push!(eqs, S_net_shdwall ~ S_net_shdwall_dir_vis + S_net_shdwall_dir_nir +
-                               S_net_shdwall_dif_vis + S_net_shdwall_dif_nir)
+    push!(
+        eqs, S_net_road ~ S_net_road_dir_vis + S_net_road_dir_nir +
+            S_net_road_dif_vis + S_net_road_dif_nir
+    )
+    push!(
+        eqs, S_net_sunwall ~ S_net_sunwall_dir_vis + S_net_sunwall_dir_nir +
+            S_net_sunwall_dif_vis + S_net_sunwall_dif_nir
+    )
+    push!(
+        eqs, S_net_shdwall ~ S_net_shdwall_dir_vis + S_net_shdwall_dir_nir +
+            S_net_shdwall_dif_vis + S_net_shdwall_dif_nir
+    )
 
     # Canyon net absorbed solar per ground area
     push!(eqs, S_net_uc ~ S_net_road + (S_net_sunwall + S_net_shdwall) * H_W)
 
     # Canyon albedos (Eqs. 2.93-2.94): α = reflected / incident per ground area
-    push!(eqs, α_uc_dir_vis ~ ifelse(
-        S_road_dir_vis + S_sunwall_dir_vis * H_W > zero_wm2,
-        S_refl_sky_dir_vis / (S_road_dir_vis + S_sunwall_dir_vis * H_W), 0.0))
-    push!(eqs, α_uc_dir_nir ~ ifelse(
-        S_road_dir_nir + S_sunwall_dir_nir * H_W > zero_wm2,
-        S_refl_sky_dir_nir / (S_road_dir_nir + S_sunwall_dir_nir * H_W), 0.0))
-    push!(eqs, α_uc_dif_vis ~ ifelse(
-        S_road_dif_vis + 2 * S_wall_dif_vis * H_W > zero_wm2,
-        S_refl_sky_dif_vis / (S_road_dif_vis + 2 * S_wall_dif_vis * H_W), 0.0))
-    push!(eqs, α_uc_dif_nir ~ ifelse(
-        S_road_dif_nir + 2 * S_wall_dif_nir * H_W > zero_wm2,
-        S_refl_sky_dif_nir / (S_road_dif_nir + 2 * S_wall_dif_nir * H_W), 0.0))
+    push!(
+        eqs, α_uc_dir_vis ~ ifelse(
+            S_road_dir_vis + S_sunwall_dir_vis * H_W > zero_wm2,
+            S_refl_sky_dir_vis / (S_road_dir_vis + S_sunwall_dir_vis * H_W), 0.0
+        )
+    )
+    push!(
+        eqs, α_uc_dir_nir ~ ifelse(
+            S_road_dir_nir + S_sunwall_dir_nir * H_W > zero_wm2,
+            S_refl_sky_dir_nir / (S_road_dir_nir + S_sunwall_dir_nir * H_W), 0.0
+        )
+    )
+    push!(
+        eqs, α_uc_dif_vis ~ ifelse(
+            S_road_dif_vis + 2 * S_wall_dif_vis * H_W > zero_wm2,
+            S_refl_sky_dif_vis / (S_road_dif_vis + 2 * S_wall_dif_vis * H_W), 0.0
+        )
+    )
+    push!(
+        eqs, α_uc_dif_nir ~ ifelse(
+            S_road_dif_nir + 2 * S_wall_dif_nir * H_W > zero_wm2,
+            S_refl_sky_dif_nir / (S_road_dif_nir + 2 * S_wall_dif_nir * H_W), 0.0
+        )
+    )
 
     # Total absorbed solar (Eq. 2.95)
     push!(eqs, S_net_total ~ W_roof * S_net_roof + (1 - W_roof) * S_net_uc)
@@ -325,22 +363,28 @@ Boulder, CO, 168 pp. Chapter 2: Albedos and Radiative Fluxes (pp. 26-60).
 
         # Initial incoming from atmosphere + emitted from other canyon surfaces
         local S0_road = L_atm_down * Ψ_sky_road +
-                        T_rw * (L_emit_sunwall + L_emit_shdwall)
+            T_rw * (L_emit_sunwall + L_emit_shdwall)
         local S0_sw = L_atm_down * Ψ_sky_wall +
-                      T_wr * L_emit_road + T_ww * L_emit_shdwall
+            T_wr * L_emit_road + T_ww * L_emit_shdwall
         local S0_sh = L_atm_down * Ψ_sky_wall +
-                      T_wr * L_emit_road + T_ww * L_emit_sunwall
+            T_wr * L_emit_road + T_ww * L_emit_sunwall
 
         # Q = M^{-1} * S_0 (total incoming after all reflections)
-        local Q_road_lw = ((1 - d_lw^2) * S0_road +
-                           b_lw * (1 + d_lw) * S0_sw +
-                           b_lw * (1 + d_lw) * S0_sh) / det_lw
-        local Q_sw_lw = (c_lw * (1 + d_lw) * S0_road +
-                         (1 - b_lw * c_lw) * S0_sw +
-                         (d_lw + b_lw * c_lw) * S0_sh) / det_lw
-        local Q_sh_lw = (c_lw * (1 + d_lw) * S0_road +
-                         (d_lw + b_lw * c_lw) * S0_sw +
-                         (1 - b_lw * c_lw) * S0_sh) / det_lw
+        local Q_road_lw = (
+            (1 - d_lw^2) * S0_road +
+                b_lw * (1 + d_lw) * S0_sw +
+                b_lw * (1 + d_lw) * S0_sh
+        ) / det_lw
+        local Q_sw_lw = (
+            c_lw * (1 + d_lw) * S0_road +
+                (1 - b_lw * c_lw) * S0_sw +
+                (d_lw + b_lw * c_lw) * S0_sh
+        ) / det_lw
+        local Q_sh_lw = (
+            c_lw * (1 + d_lw) * S0_road +
+                (d_lw + b_lw * c_lw) * S0_sw +
+                (1 - b_lw * c_lw) * S0_sh
+        ) / det_lw
 
         # Net LW = emitted - absorbed = L_emit - ε * Q
         push!(eqs, L_net_road ~ L_emit_road - ε_road * Q_road_lw)
