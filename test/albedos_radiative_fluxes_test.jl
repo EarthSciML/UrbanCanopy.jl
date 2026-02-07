@@ -72,6 +72,38 @@ end
     @test compiled isa ModelingToolkit.AbstractSystem
 end
 
+@testitem "Unit Verification" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    sys = UrbanRadiation()
+
+    # Verify units of unknowns with W/m^2 units
+    for v in unknowns(sys)
+        name = string(Symbolics.tosymbol(v, escape = false))
+        u = ModelingToolkit.get_unit(v)
+        if startswith(name, "S_net_") || startswith(name, "S_refl_") ||
+                startswith(name, "S_road_d") || startswith(name, "S_sunwall_d") ||
+                startswith(name, "S_wall_d") ||
+                startswith(name, "L_up_") || startswith(name, "L_net_") ||
+                startswith(name, "L_emit_")
+            @test u == u"W/m^2"
+        elseif name == "θ_0"
+            @test u == u"rad"
+        end
+    end
+
+    # Verify units of key parameters
+    for p in parameters(sys)
+        name = string(Symbolics.tosymbol(p, escape = false))
+        u = ModelingToolkit.get_unit(p)
+        if startswith(name, "S_atm_") || name == "L_atm_down"
+            @test u == u"W/m^2"
+        elseif name == "μ_zen"
+            @test u == u"rad"
+        elseif startswith(name, "T_")
+            @test u == u"K"
+        end
+    end
+end
+
 @testitem "View Factors - Known Values" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
     sys = UrbanRadiation()
     compiled = mtkcompile(sys)
