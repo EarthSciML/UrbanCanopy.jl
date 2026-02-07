@@ -139,7 +139,7 @@ end
     @test s_sunwall > 0
 
     # Energy conservation: road_factor + H/W * sunwall_factor ≈ 1 (Eq. 2.18)
-    @test sol[compiled.S_road_factor][end] + hw * sol[compiled.S_sunwall_factor][end] ≈ 1.0 rtol = 0.01
+    @test sol[compiled.S_road_factor][end] + hw * sol[compiled.S_sunwall_factor][end] ≈ 1.0 rtol = 1.0e-10
 
     # At high zenith angle (nearly overhead), most radiation hits road
     params_overhead = copy(params)
@@ -407,4 +407,165 @@ end
 
     # Roof LW is independent of canyon geometry
     @test all(x -> isapprox(x, net_lw_roof[1], rtol = 1.0e-10), net_lw_roof)
+end
+
+@testitem "Direct Beam Energy Conservation Across H/W" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    # Eq. 2.18: S_road_factor + H/W * S_sunwall_factor = 1 for all H/W
+    sys = UrbanRadiation()
+    compiled = mtkcompile(sys)
+
+    for hw in [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+        for μ in [0.1, 0.3, 0.5236, 1.0, 1.4]
+            params = default_params(compiled)
+            params[compiled.H_W] = hw
+            params[compiled.μ_zen] = μ
+            sol = solve_system(compiled, params)
+            road_f = sol[compiled.S_road_factor][end]
+            wall_f = sol[compiled.S_sunwall_factor][end]
+            @test road_f + hw * wall_f ≈ 1.0 rtol = 1.0e-10
+        end
+    end
+end
+
+@testitem "Longwave Energy Conservation" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    # Eq. 2.174: L_net_uc - (L_uc_up - L_atm_down) = 0
+    # Equivalently, the canyon upward LW should equal L_atm_down + L_net_uc
+    sys = UrbanRadiation()
+    compiled = mtkcompile(sys)
+
+    σ = 5.67e-8
+
+    for hw in [0.5, 1.0, 2.0, 5.0]
+        params = default_params(compiled)
+        params[compiled.H_W] = hw
+        # Set all temperatures equal for simpler verification
+        T = 292.16
+        ε = 0.95
+        L_atm = params[compiled.L_atm_down]
+        params[compiled.T_roof] = T
+        params[compiled.T_road] = T
+        params[compiled.T_sunwall] = T
+        params[compiled.T_shdwall] = T
+        params[compiled.ε_roof] = ε
+        params[compiled.ε_road] = ε
+        params[compiled.ε_wall] = ε
+        sol = solve_system(compiled, params)
+
+        # For the roof: L_net_roof = L_up_roof - L_atm_down (Eq. 2.101)
+        L_up_roof_expected = ε * σ * T^4 + (1 - ε) * L_atm
+        @test sol[compiled.L_net_roof][end] ≈ L_up_roof_expected - L_atm rtol = 1.0e-8
+
+        # Total net LW = W_roof * L_net_roof + (1 - W_roof) * L_net_uc (Eq. 2.175)
+        w_roof = params[compiled.W_roof]
+        expected_total = w_roof * sol[compiled.L_net_roof][end] +
+            (1 - w_roof) * sol[compiled.L_net_uc][end]
+        @test sol[compiled.L_net_total][end] ≈ expected_total rtol = 1.0e-8
+
+        # Net LW should be finite and non-negative when surfaces are warmer
+        @test sol[compiled.L_net_uc][end] >= 0
+        @test isfinite(sol[compiled.L_net_total][end])
+    end
+end
+
+@testitem "Solar Conservation Across H/W Sweep" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    # Verify Eq. 2.92: incident = absorbed + reflected for each waveband
+    # across many H/W ratios
+    sys = UrbanRadiation()
+    compiled = mtkcompile(sys)
+
+    for hw in [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+        params = default_params(compiled)
+        params[compiled.H_W] = hw
+        sol = solve_system(compiled, params)
+
+        # For diffuse VIS: incident = road + 2*wall*H/W
+        incident_dif_vis = sol[compiled.S_road_dif_vis][end] +
+            2 * sol[compiled.S_wall_dif_vis][end] * hw
+        absorbed_dif_vis = sol[compiled.S_net_road_dif_vis][end] +
+            (sol[compiled.S_net_sunwall_dif_vis][end] + sol[compiled.S_net_shdwall_dif_vis][end]) * hw
+        @test incident_dif_vis ≈ absorbed_dif_vis + sol[compiled.S_refl_sky_dif_vis][end] rtol = 1.0e-8
+
+        # For direct VIS: incident = road + sunwall*H/W (no shaded wall)
+        incident_dir_vis = sol[compiled.S_road_dir_vis][end] +
+            sol[compiled.S_sunwall_dir_vis][end] * hw
+        absorbed_dir_vis = sol[compiled.S_net_road_dir_vis][end] +
+            (sol[compiled.S_net_sunwall_dir_vis][end] + sol[compiled.S_net_shdwall_dir_vis][end]) * hw
+        @test incident_dir_vis ≈ absorbed_dir_vis + sol[compiled.S_refl_sky_dir_vis][end] rtol = 1.0e-8
+    end
+end
+
+@testitem "View Factor Analytical Values" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    # Verify view factor formulas against manually computed reference values
+    # for several H/W ratios (Eqs. 2.22-2.28)
+    sys = UrbanRadiation()
+    compiled = mtkcompile(sys)
+
+    for hw in [0.1, 0.5, 1.0, 2.0, 5.0]
+        params = default_params(compiled)
+        params[compiled.H_W] = hw
+        sol = solve_system(compiled, params)
+
+        # Eq. 2.25: Ψ_road_sky = sqrt(1 + (H/W)²) - H/W
+        ψ_rs = sqrt(1 + hw^2) - hw
+        @test sol[compiled.Ψ_road_sky][end] ≈ ψ_rs rtol = 1.0e-10
+
+        # Eq. 2.24: Ψ_sky_wall (per wall area) = (H/W + 1 - sqrt(1+(H/W)²))/(2*H/W)
+        ψ_sw = (hw + 1 - sqrt(1 + hw^2)) / (2 * hw)
+        @test sol[compiled.Ψ_sky_wall][end] ≈ ψ_sw rtol = 1.0e-10
+
+        # Eq. 2.26: Ψ_wall_road = Ψ_wall_sky
+        @test sol[compiled.Ψ_wall_road][end] ≈ sol[compiled.Ψ_wall_sky][end] rtol = 1.0e-10
+
+        # Eq. 2.27: Ψ_road_wall = (1 - Ψ_road_sky) / 2
+        @test sol[compiled.Ψ_road_wall][end] ≈ (1 - ψ_rs) / 2 rtol = 1.0e-10
+
+        # Eq. 2.28: Ψ_wall_wall = 1 - Ψ_wall_sky - Ψ_wall_road
+        @test sol[compiled.Ψ_wall_wall][end] ≈ 1 - 2 * ψ_sw rtol = 1.0e-10
+
+        # Sum-to-one checks
+        @test sol[compiled.Ψ_wall_sky][end] + sol[compiled.Ψ_wall_road][end] +
+            sol[compiled.Ψ_wall_wall][end] ≈ 1.0 rtol = 1.0e-10
+        @test sol[compiled.Ψ_road_sky][end] + 2 * sol[compiled.Ψ_road_wall][end] ≈ 1.0 rtol = 1.0e-10
+    end
+end
+
+@testitem "Blackbody Canyon LW - Equal Temperature" setup = [AlbedoRadSetup] tags = [:albedo_rad] begin
+    # When all surfaces have the same temperature T and emissivity = 1 (blackbody),
+    # the net LW for each surface should be ε*σ*T⁴ - L_atm
+    # because with ε=1, no reflection occurs and each surface absorbs everything
+    sys = UrbanRadiation()
+    compiled = mtkcompile(sys)
+
+    σ = 5.67e-8
+    T = 300.0
+    L_atm = 340.0
+
+    params = default_params(compiled)
+    params[compiled.T_roof] = T
+    params[compiled.T_road] = T
+    params[compiled.T_sunwall] = T
+    params[compiled.T_shdwall] = T
+    params[compiled.ε_roof] = 1.0
+    params[compiled.ε_road] = 1.0
+    params[compiled.ε_wall] = 1.0
+    params[compiled.H_W] = 1.0
+    params[compiled.L_atm_down] = L_atm
+    sol = solve_system(compiled, params)
+
+    # With blackbody surfaces at equal temperature, all canyon surfaces
+    # should have the same net LW: emit σT⁴, absorb from other surfaces
+    # For road: absorbs L_atm*Ψ_road_sky + σT⁴*Ψ_road_wall*2 (from walls)
+    #           + multi-reflection (none since ε=1)
+    # emits: σT⁴
+    # Net = σT⁴ - [L_atm*Ψ_rs + σT⁴*(1-Ψ_rs)]
+    #     = σT⁴*Ψ_rs - L_atm*Ψ_rs = Ψ_rs*(σT⁴ - L_atm)
+    ψ_rs = sqrt(1 + 1.0^2) - 1.0
+    expected_road_net = ψ_rs * (σ * T^4 - L_atm)
+    @test sol[compiled.L_net_road][end] ≈ expected_road_net rtol = 1.0e-6
+
+    # Walls: Net = Ψ_wall_sky * (σT⁴ - L_atm)
+    ψ_ws = (1.0 + 1 - sqrt(1 + 1.0^2)) / (2 * 1.0)
+    expected_wall_net = ψ_ws * (σ * T^4 - L_atm)
+    @test sol[compiled.L_net_sunwall][end] ≈ expected_wall_net rtol = 1.0e-6
+    @test sol[compiled.L_net_shdwall][end] ≈ expected_wall_net rtol = 1.0e-6
 end
