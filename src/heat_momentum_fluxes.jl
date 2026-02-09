@@ -207,8 +207,10 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, λ_p ~ H_W / (H_W + 1))                                            # Eq. 3.56
     push!(eqs, λ_F ~ (1 - λ_p) * H_W)                                            # Eq. 3.58 (with B_S/B_L = λ_p)
     push!(eqs, d_canopy ~ H_canyon * (1 + (α_rough)^(-λ_p) * (λ_p - 1)))         # Eq. 3.55
-    push!(eqs, z_0m_canopy ~ H_canyon * (1 - d_canopy / H_canyon) *               # Eq. 3.57
-        exp(-((0.5 * B_drag * C_D / k_vk^2 * (1 - d_canopy / H_canyon) * λ_F))^(-0.5)))
+    push!(
+        eqs, z_0m_canopy ~ H_canyon * (1 - d_canopy / H_canyon) *               # Eq. 3.57
+            exp(-((0.5 * B_drag * C_D / k_vk^2 * (1 - d_canopy / H_canyon) * λ_F))^(-0.5))
+    )
 
     # ===== Wind Speed =====
     push!(eqs, V_r ~ max(sqrt(u_atm^2 + v_atm^2), one_ms))                       # Eq. 3.63
@@ -239,9 +241,13 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         # Very stable: ψ_m(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.36)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
 
-        return ifelse(ζ_val < ζ_m_trans, ψ_very_unstable,
-            ifelse(ζ_val < 0, ψ_unstable,
-                ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)))
+        return ifelse(
+            ζ_val < ζ_m_trans, ψ_very_unstable,
+            ifelse(
+                ζ_val < 0, ψ_unstable,
+                ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)
+            )
+        )
     end
 
     # ψ_h = ψ_w stability correction function (Eqs. 3.32, 3.38-3.46)
@@ -259,9 +265,13 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         # Very stable: ψ_h(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.41)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
 
-        return ifelse(ζ_val < ζ_h_trans, ψ_very_unstable,
-            ifelse(ζ_val < 0, ψ_unstable,
-                ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)))
+        return ifelse(
+            ζ_val < ζ_h_trans, ψ_very_unstable,
+            ifelse(
+                ζ_val < 0, ψ_unstable,
+                ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)
+            )
+        )
     end
 
     push!(eqs, ψ_m_atm ~ _ψ_m(ζ_in))
@@ -280,32 +290,44 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, V_a ~ max(sqrt(u_atm^2 + v_atm^2), one_ms))                       # Eq. 3.25 (simplified)
 
     # ===== Friction Velocity (Eq. 3.26) =====
-    push!(eqs, u_star ~ max(k_vk * V_a /
-        (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0), 0.01 * one_ms))
+    push!(
+        eqs, u_star ~ max(
+            k_vk * V_a /
+                (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0), 0.01 * one_ms
+        )
+    )
 
     # ===== Aerodynamic Resistances (Eqs. 3.65-3.67) =====
     push!(eqs, r_am ~ V_a / u_star^2)                                             # Eq. 3.65
 
-    push!(eqs, r_ah ~ (1 / (k_vk^2 * V_a)) *                                     # Eq. 3.66
-        (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0) *
-        (log((z_atm_h - d_canopy) / z_0m_canopy) - ψ_h_atm + ψ_h_0))
+    push!(
+        eqs, r_ah ~ (1 / (k_vk^2 * V_a)) *                                     # Eq. 3.66
+            (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0) *
+            (log((z_atm_h - d_canopy) / z_0m_canopy) - ψ_h_atm + ψ_h_0)
+    )
 
-    push!(eqs, r_aw ~ (1 / (k_vk^2 * V_a)) *                                     # Eq. 3.67
-        (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0) *
-        (log((z_atm_w - d_canopy) / z_0m_canopy) - ψ_w_atm + ψ_w_0))
+    push!(
+        eqs, r_aw ~ (1 / (k_vk^2 * V_a)) *                                     # Eq. 3.67
+            (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0) *
+            (log((z_atm_w - d_canopy) / z_0m_canopy) - ψ_w_atm + ψ_w_0)
+    )
 
     # ===== Canyon Wind Speed (Section 3.2.2, Eqs. 3.59-3.62) =====
     begin
-        local log_ratio = log(max((H_canyon - d_canopy) / z_0m_canopy, 1.0 + 1e-10)) /
-            log(max((z_atm_m - d_canopy) / z_0m_canopy, 1.0 + 1e-10))
+        local log_ratio = log(max((H_canyon - d_canopy) / z_0m_canopy, 1.0 + 1.0e-10)) /
+            log(max((z_atm_m - d_canopy) / z_0m_canopy, 1.0 + 1.0e-10))
         local exp_decay = exp(-0.5 * H_W * (1 - H_w_est / H_canyon))
 
         local U_skim = V_r * (2 / π_val) * log_ratio * exp_decay                  # Eq. 3.60
         local U_isol = V_r * log_ratio * exp_decay                                 # Eq. 3.61
         local U_wake = V_r * (1 + 2 * (2 / π_val - 1) * (H_W - 0.5)) * log_ratio * exp_decay  # Eq. 3.62
 
-        push!(eqs, U_can ~ ifelse(H_W ≥ 1, U_skim,
-            ifelse(H_W ≥ 0.5, U_wake, U_isol)))
+        push!(
+            eqs, U_can ~ ifelse(
+                H_W ≥ 1, U_skim,
+                ifelse(H_W ≥ 0.5, U_wake, U_isol)
+            )
+        )
     end
 
     # W_can = u_* (Masson 2000); U_ac = √(U_can² + W_can²) (Eq. 3.59)
@@ -326,9 +348,13 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         local c_sunwall = (1 - W_roof) * H_W / r_s_u
         local c_shdwall = (1 - W_roof) * H_W / r_s_u
 
-        push!(eqs, T_ac ~ (c_a_h * θ_atm + c_roof * T_g_roof + c_prvrd * T_g_prvrd +  # Eq. 3.75
-            c_imprvrd * T_g_imprvrd + c_sunwall * T_g_sunwall + c_shdwall * T_g_shdwall) /
-            (c_a_h + c_roof + c_prvrd + c_imprvrd + c_sunwall + c_shdwall))
+        push!(
+            eqs, T_ac ~ (
+                c_a_h * θ_atm + c_roof * T_g_roof + c_prvrd * T_g_prvrd +  # Eq. 3.75
+                    c_imprvrd * T_g_imprvrd + c_sunwall * T_g_sunwall + c_shdwall * T_g_shdwall
+            ) /
+                (c_a_h + c_roof + c_prvrd + c_imprvrd + c_sunwall + c_shdwall)
+        )
     end
 
     # ===== UCL Air Specific Humidity (Eq. 3.93) =====
@@ -337,9 +363,13 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         local cw_prvrd = (1 - W_roof) * f_prvrd / r_s_u
         local cw_imprvrd = (1 - W_roof) * (1 - f_prvrd) / r_s_u
 
-        push!(eqs, q_ac ~ (c_a_w * q_atm + cw_roof * f_wet_roof * q_g_roof +            # Eq. 3.93
-            cw_prvrd * q_g_prvrd + cw_imprvrd * f_wet_imprvrd * q_g_imprvrd) /
-            (c_a_w + f_wet_roof * cw_roof + cw_prvrd + f_wet_imprvrd * cw_imprvrd))
+        push!(
+            eqs, q_ac ~ (
+                c_a_w * q_atm + cw_roof * f_wet_roof * q_g_roof +            # Eq. 3.93
+                    cw_prvrd * q_g_prvrd + cw_imprvrd * f_wet_imprvrd * q_g_imprvrd
+            ) /
+                (c_a_w + f_wet_roof * cw_roof + cw_prvrd + f_wet_imprvrd * cw_imprvrd)
+        )
     end
 
     # ===== Sensible Heat Fluxes (Eqs. 3.69-3.74) =====
@@ -349,9 +379,13 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, H_sunwall ~ -ρ_atm * C_p * (T_ac - T_g_sunwall) / r_s_u)          # Eq. 3.72
     push!(eqs, H_shdwall ~ -ρ_atm * C_p * (T_ac - T_g_shdwall) / r_s_u)          # Eq. 3.73
 
-    push!(eqs, H_total ~ W_roof * H_roof + (1 - W_roof) *                         # Eq. 3.74
-        (f_prvrd * H_prvrd + (1 - f_prvrd) * H_imprvrd +
-         H_W * H_sunwall + H_W * H_shdwall))
+    push!(
+        eqs, H_total ~ W_roof * H_roof + (1 - W_roof) *                         # Eq. 3.74
+            (
+            f_prvrd * H_prvrd + (1 - f_prvrd) * H_imprvrd +
+                H_W * H_sunwall + H_W * H_shdwall
+        )
+    )
 
     # ===== Water Vapor Fluxes (Eqs. 3.76-3.81) =====
     push!(eqs, E_roof ~ -ρ_atm * f_wet_roof * (q_ac - q_g_roof) / r_s_u)         # Eq. 3.76
@@ -359,8 +393,10 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, E_imprvrd ~ -ρ_atm * f_wet_imprvrd * (q_ac - q_g_imprvrd) / r_s_u)  # Eq. 3.78
     # E_sunwall = 0 (Eq. 3.79), E_shdwall = 0 (Eq. 3.80)
 
-    push!(eqs, E_total ~ W_roof * E_roof + (1 - W_roof) *                         # Eq. 3.81
-        (f_prvrd * E_prvrd + (1 - f_prvrd) * E_imprvrd))
+    push!(
+        eqs, E_total ~ W_roof * E_roof + (1 - W_roof) *                         # Eq. 3.81
+            (f_prvrd * E_prvrd + (1 - f_prvrd) * E_imprvrd)
+    )
 
     # ===== Momentum Fluxes (Eqs. 3.6-3.7) =====
     push!(eqs, τ_x ~ -ρ_atm * u_atm / r_am)                                      # Eq. 3.6

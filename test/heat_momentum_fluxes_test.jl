@@ -46,7 +46,7 @@
     Returns the solution.
     """
     function solve_system(compiled, params)
-        prob = ODEProblem(compiled, [], (0.0, 1.0), collect(params))
+        prob = ODEProblem(compiled, params, (0.0, 1.0))
         sol = solve(prob)
         return sol
     end
@@ -188,10 +188,10 @@ end
     sol = solve_system(compiled, params)
 
     # With H/W = 1, plan area index λ_p = 1/(1+1) = 0.5
-    @test sol[compiled.λ_p][end] ≈ 0.5 rtol = 1e-10
+    @test sol[compiled.λ_p][end] ≈ 0.5 rtol = 1.0e-10
 
     # Frontal area index λ_F = (1 - λ_p)(H/W) = 0.5 * 1.0 = 0.5
-    @test sol[compiled.λ_F][end] ≈ 0.5 rtol = 1e-10
+    @test sol[compiled.λ_F][end] ≈ 0.5 rtol = 1.0e-10
 
     # Displacement height should be between 0 and H
     d = sol[compiled.d_canopy][end]
@@ -200,7 +200,7 @@ end
 
     # Eq. 3.55: d = H[1 + α^{-λ_p}(λ_p - 1)]
     d_expected = 10.0 * (1 + 4.43^(-0.5) * (0.5 - 1))
-    @test d ≈ d_expected rtol = 1e-6
+    @test d ≈ d_expected rtol = 1.0e-6
 
     # Roughness length should be positive and less than H - d
     z0m = sol[compiled.z_0m_canopy][end]
@@ -210,7 +210,7 @@ end
     # Check z_0m formula (Eq. 3.57)
     z0m_expected = 10.0 * (1 - d_expected / 10.0) *
         exp(-(0.5 * 1.0 * 1.2 / 0.4^2 * (1 - d_expected / 10.0) * 0.5)^(-0.5))
-    @test z0m ≈ z0m_expected rtol = 1e-6
+    @test z0m ≈ z0m_expected rtol = 1.0e-6
 end
 
 @testitem "Roughness - Limiting H/W" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -222,7 +222,7 @@ end
     sol = solve_system(compiled, params)
 
     # λ_p = 0.1/1.1 ≈ 0.0909
-    @test sol[compiled.λ_p][end] ≈ 0.1 / 1.1 rtol = 1e-10
+    @test sol[compiled.λ_p][end] ≈ 0.1 / 1.1 rtol = 1.0e-10
 
     # d_canopy should be small relative to H
     d = sol[compiled.d_canopy][end]
@@ -233,7 +233,7 @@ end
     sol2 = solve_system(compiled, params)
 
     # λ_p = 5/6 ≈ 0.833
-    @test sol2[compiled.λ_p][end] ≈ 5.0 / 6.0 rtol = 1e-10
+    @test sol2[compiled.λ_p][end] ≈ 5.0 / 6.0 rtol = 1.0e-10
 
     # d_canopy should be larger for deeper canyons
     d2 = sol2[compiled.d_canopy][end]
@@ -325,14 +325,14 @@ end
     # r_am = V_a / u_*² (Eq. 3.65)
     V_a = sol[compiled.V_a][end]
     u_star = sol[compiled.u_star][end]
-    @test sol[compiled.r_am][end] ≈ V_a / u_star^2 rtol = 1e-6
+    @test sol[compiled.r_am][end] ≈ V_a / u_star^2 rtol = 1.0e-6
 
     # Surface resistance (Eq. 3.68)
     ρ = 1.2  # ρ_atm
     C_p = 1004.64
     U_ac = sol[compiled.U_ac][end]
     r_s_expected = ρ * C_p / (11.8 + 4.2 * U_ac)
-    @test sol[compiled.r_s_u][end] ≈ r_s_expected rtol = 1e-6
+    @test sol[compiled.r_s_u][end] ≈ r_s_expected rtol = 1.0e-6
 end
 
 @testitem "Canyon Wind Speed" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -351,7 +351,7 @@ end
 
     # U_ac = √(U_can² + u_*²) (Eq. 3.59)
     u_star = sol[compiled.u_star][end]
-    @test sol[compiled.U_ac][end] ≈ sqrt(U_can_skimming^2 + u_star^2) rtol = 1e-6
+    @test sol[compiled.U_ac][end] ≈ sqrt(U_can_skimming^2 + u_star^2) rtol = 1.0e-6
 
     # Test isolated flow (H/W < 0.5)
     params[compiled.H_W] = 0.3
@@ -392,8 +392,8 @@ end
     # should still be bounded by atmospheric and surface values
     q_min = min(0.01, 0.012)  # q_atm and q_g_prvrd (only active surface)
     q_max = max(0.01, 0.012)
-    @test q_ac ≥ q_min - 1e-6
-    @test q_ac ≤ q_max + 1e-6
+    @test q_ac ≥ q_min - 1.0e-6
+    @test q_ac ≤ q_max + 1.0e-6
 end
 
 @testitem "Sensible Heat Flux Signs" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -432,7 +432,7 @@ end
     E_imprvrd = sol[compiled.E_imprvrd][end]
 
     expected = 0.25 * E_roof + 0.75 * (0.5 * E_prvrd + 0.5 * E_imprvrd)
-    @test E_total ≈ expected rtol = 1e-6
+    @test E_total ≈ expected rtol = 1.0e-6
 end
 
 @testitem "Momentum Flux Direction" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -450,7 +450,7 @@ end
     τ_x = sol[compiled.τ_x][end]
     τ_y = sol[compiled.τ_y][end]
     # τ_x/τ_y = u_atm/v_atm = 3/2
-    @test τ_x / τ_y ≈ 3.0 / 2.0 rtol = 1e-6
+    @test τ_x / τ_y ≈ 3.0 / 2.0 rtol = 1.0e-6
 end
 
 @testitem "Friction Velocity Positivity" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -505,7 +505,7 @@ end
     sol_wet = solve_system(compiled, params_wet)
 
     # Wet surfaces should have larger evaporation magnitude
-    @test abs(sol_wet[compiled.E_total][end]) ≥ abs(sol_dry[compiled.E_total][end]) - 1e-10
+    @test abs(sol_wet[compiled.E_total][end]) ≥ abs(sol_dry[compiled.E_total][end]) - 1.0e-10
 end
 
 @testitem "Monin-Obukhov Length Consistency" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
@@ -519,7 +519,7 @@ end
     d = sol[compiled.d_canopy][end]
     ζ_in = 0.1
     L_expected = (z_atm_m - d) / ζ_in
-    @test sol[compiled.L_MO][end] ≈ L_expected rtol = 1e-6
+    @test sol[compiled.L_MO][end] ≈ L_expected rtol = 1.0e-6
 
     # L_MO should be positive for stable conditions (ζ > 0)
     @test sol[compiled.L_MO][end] > 0.0
