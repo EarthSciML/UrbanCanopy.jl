@@ -54,6 +54,16 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         one_m = 1.0, [description = "Unit length for non-dimensionalization", unit = u"m"]
     end
 
+    # Businger-Dyer stability parameters (Eqs. 3.31-3.32)
+    @constants begin
+        γ_BD = 16.0, [description = "Businger-Dyer unstable parameter (Eqs. 3.31-3.32) (dimensionless)"]
+        a_BD = 5.0, [description = "Businger-Dyer stable parameter (Eqs. 3.31-3.32) (dimensionless)"]
+        ζ_m_threshold = -1.574, [description = "Very unstable transition for ψ_m, from matching φ_m at ζ_m (dimensionless)"]
+        ζ_h_threshold = -0.465, [description = "Very unstable transition for ψ_h, from matching φ_h at ζ_h (dimensionless)"]
+        c_vu_m = 1.14, [description = "Very unstable momentum correction coefficient (Eq. 3.33) (dimensionless)"]
+        c_vu_h = 0.8, [description = "Very unstable heat correction coefficient (Eq. 3.38) (dimensionless)"]
+    end
+
     # Surface resistance coefficients (Eq. 3.68, Rowley et al. 1930)
     @constants begin
         h_c_free = 11.8, [description = "Free convection coefficient in surface resistance (Eq. 3.68)", unit = u"W/(m^2*K)"]
@@ -244,21 +254,21 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
 
     # ψ_m stability correction function (Eqs. 3.31, 3.33-3.37)
     function _ψ_m(ζ_val)
-        x = (1 - 16 * ζ_val)^(1 / 4)
+        x = (1 - γ_BD * ζ_val)^(1 / 4)
         ψ_unstable = 2 * log((1 + x) / 2) + log((1 + x^2) / 2) - 2 * atan(x) + π_val / 2  # Eq. 3.37
-        ψ_stable = -5 * ζ_val
+        ψ_stable = -a_BD * ζ_val
 
-        # Very unstable transition at ζ = -1.574
-        ζ_m_trans = -1.574
-        x_trans = (1 - 16 * ζ_m_trans)^(1 / 4)
+        # Very unstable transition at ζ_m_threshold
+        x_trans = (1 - γ_BD * ζ_m_threshold)^(1 / 4)
         ψ_m_at_trans = 2 * log((1 + x_trans) / 2) + log((1 + x_trans^2) / 2) - 2 * atan(x_trans) + π_val / 2
-        ψ_very_unstable = ψ_m_at_trans + log(ζ_val / ζ_m_trans) - 1.14 * ((-ζ_val)^(1 / 3) - (-ζ_m_trans)^(1 / 3))  # From Eq. 3.33
+        ψ_very_unstable = ψ_m_at_trans + log(ζ_val / ζ_m_threshold) - c_vu_m * ((-ζ_val)^(1 / 3) - (-ζ_m_threshold)^(1 / 3))  # From Eq. 3.33
 
-        # Very stable: ψ_m(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.36)
-        ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
+        # Very stable: ψ_m(ζ>1) derived from integrating φ_m = a_BD + ζ (Eq. 3.36)
+        # ψ_m(ζ) = -a_BD + (-a_BD + 1)*ln(ζ) - (ζ - 1) = -(a_BD-1)*ln(ζ) - ζ - (a_BD-1)
+        ψ_very_stable = -(a_BD - 1) * log(ζ_val) - ζ_val - (a_BD - 1)
 
         return ifelse(
-            ζ_val < ζ_m_trans, ψ_very_unstable,
+            ζ_val < ζ_m_threshold, ψ_very_unstable,
             ifelse(
                 ζ_val < 0, ψ_unstable,
                 ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)
@@ -268,21 +278,20 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
 
     # ψ_h = ψ_w stability correction function (Eqs. 3.32, 3.38-3.46)
     function _ψ_h(ζ_val)
-        x = (1 - 16 * ζ_val)^(1 / 4)
+        x = (1 - γ_BD * ζ_val)^(1 / 4)
         ψ_unstable = 2 * log((1 + x^2) / 2)  # Eq. 3.46
-        ψ_stable = -5 * ζ_val
+        ψ_stable = -a_BD * ζ_val
 
-        # Very unstable transition at ζ = -0.465
-        ζ_h_trans = -0.465
-        x_trans = (1 - 16 * ζ_h_trans)^(1 / 4)
+        # Very unstable transition at ζ_h_threshold
+        x_trans = (1 - γ_BD * ζ_h_threshold)^(1 / 4)
         ψ_h_at_trans = 2 * log((1 + x_trans^2) / 2)
-        ψ_very_unstable = ψ_h_at_trans + log(ζ_val / ζ_h_trans) + 0.8 * ((-ζ_val)^(-1 / 3) - (-ζ_h_trans)^(-1 / 3))  # From Eq. 3.38
+        ψ_very_unstable = ψ_h_at_trans + log(ζ_val / ζ_h_threshold) + c_vu_h * ((-ζ_val)^(-1 / 3) - (-ζ_h_threshold)^(-1 / 3))  # From Eq. 3.38
 
-        # Very stable: ψ_h(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.41)
-        ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
+        # Very stable: ψ_h(ζ>1) derived from integrating φ_h = a_BD + ζ (Eq. 3.41)
+        ψ_very_stable = -(a_BD - 1) * log(ζ_val) - ζ_val - (a_BD - 1)
 
         return ifelse(
-            ζ_val < ζ_h_trans, ψ_very_unstable,
+            ζ_val < ζ_h_threshold, ψ_very_unstable,
             ifelse(
                 ζ_val < 0, ψ_unstable,
                 ifelse(ζ_val ≤ 1, ψ_stable, ψ_very_stable)
