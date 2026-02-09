@@ -254,7 +254,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         ζ_m_trans = -1.574
         x_trans = (1 - 16 * ζ_m_trans)^(1 / 4)
         ψ_m_at_trans = 2 * log((1 + x_trans) / 2) + log((1 + x_trans^2) / 2) - 2 * atan(x_trans) + π_val / 2
-        ψ_very_unstable = ψ_m_at_trans + 1.14 * ((-ζ_val)^(1 / 3) - (-ζ_m_trans)^(1 / 3))  # From Eq. 3.33
+        ψ_very_unstable = ψ_m_at_trans + log(ζ_val / ζ_m_trans) + 1.14 * ((-ζ_val)^(1 / 3) - (-ζ_m_trans)^(1 / 3))  # From Eq. 3.33
 
         # Very stable: ψ_m(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.36)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
@@ -278,7 +278,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         ζ_h_trans = -0.465
         x_trans = (1 - 16 * ζ_h_trans)^(1 / 4)
         ψ_h_at_trans = 2 * log((1 + x_trans^2) / 2)
-        ψ_very_unstable = ψ_h_at_trans + 0.8 * ((-ζ_h_trans)^(-1 / 3) - (-ζ_val)^(-1 / 3))  # From Eq. 3.38
+        ψ_very_unstable = ψ_h_at_trans + log(ζ_val / ζ_h_trans) + 0.8 * ((-ζ_h_trans)^(-1 / 3) - (-ζ_val)^(-1 / 3))  # From Eq. 3.38
 
         # Very stable: ψ_h(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.41)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
