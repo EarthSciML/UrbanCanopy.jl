@@ -471,6 +471,424 @@ end
 end
 
 # ========================================================================
+# Waste Heat Allocation Tests
+# ========================================================================
+
+@testitem "WasteHeatAllocation - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = WasteHeatAllocation()
+
+    @test length(equations(sys)) == 4
+    @test length(unknowns(sys)) == 4
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "WasteHeatAllocation - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = WasteHeatAllocation()
+    compiled = mtkcompile(sys)
+
+    H_wh = 80.0
+    H_ac = 20.0
+    W_roof = 0.3
+
+    params = Dict(
+        compiled.H_wasteheat => H_wh,
+        compiled.H_aircond => H_ac,
+        compiled.W_roof => W_roof,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.27: waste heat divided by (1 - W_roof)
+    expected_wh = H_wh / (1 - W_roof)
+    @test sol[compiled.H_wasteheat_prvrd][end] ≈ expected_wh rtol = 1.0e-10
+    @test sol[compiled.H_wasteheat_imprvrd][end] ≈ expected_wh rtol = 1.0e-10
+
+    expected_ac = H_ac / (1 - W_roof)
+    @test sol[compiled.H_aircond_prvrd][end] ≈ expected_ac rtol = 1.0e-10
+    @test sol[compiled.H_aircond_imprvrd][end] ≈ expected_ac rtol = 1.0e-10
+end
+
+@testitem "WasteHeatAllocation - Equal Distribution" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = WasteHeatAllocation()
+    compiled = mtkcompile(sys)
+
+    # Both road types get the same allocation
+    params = Dict(
+        compiled.H_wasteheat => 50.0,
+        compiled.H_aircond => 10.0,
+        compiled.W_roof => 0.25,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    @test sol[compiled.H_wasteheat_prvrd][end] ≈ sol[compiled.H_wasteheat_imprvrd][end] rtol = 1.0e-10
+    @test sol[compiled.H_aircond_prvrd][end] ≈ sol[compiled.H_aircond_imprvrd][end] rtol = 1.0e-10
+end
+
+# ========================================================================
+# Adjusted Layer Thickness Tests
+# ========================================================================
+
+@testitem "AdjustedLayerThickness - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = AdjustedLayerThickness()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "AdjustedLayerThickness - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = AdjustedLayerThickness()
+    compiled = mtkcompile(sys)
+
+    z_i = 0.05
+    z_h_im1 = 0.0
+    z_ip1 = 0.15
+    c_a = 0.34
+
+    params = Dict(
+        compiled.z_i => z_i,
+        compiled.z_h_im1 => z_h_im1,
+        compiled.z_ip1 => z_ip1,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.30: Δz* = 0.5 * [z_i - z_{h,i-1} + c_a*(z_{i+1} - z_{h,i-1})]
+    expected = 0.5 * (z_i - z_h_im1 + c_a * (z_ip1 - z_h_im1))
+    @test sol[compiled.Δz_star][end] ≈ expected rtol = 1.0e-10
+end
+
+@testitem "AdjustedLayerThickness - Positive Output" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = AdjustedLayerThickness()
+    compiled = mtkcompile(sys)
+
+    # Typical road layer geometry
+    params = Dict(
+        compiled.z_i => 0.1,
+        compiled.z_h_im1 => 0.0,
+        compiled.z_ip1 => 0.3,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    @test sol[compiled.Δz_star][end] > 0
+end
+
+# ========================================================================
+# Heating/Cooling Flux Tests
+# ========================================================================
+
+@testitem "HeatingCoolingFlux - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = HeatingCoolingFlux()
+
+    @test length(equations(sys)) == 3
+    @test length(unknowns(sys)) == 3
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "HeatingCoolingFlux - Heating Active" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = HeatingCoolingFlux()
+    compiled = mtkcompile(sys)
+
+    # T_iB < T_min => heating active
+    params = Dict(
+        compiled.T_iB => 285.0,
+        compiled.T_iB_min => 290.0,
+        compiled.T_iB_max => 300.0,
+        compiled.F_bottom_n => -20.0,
+        compiled.F_bottom_np1 => -25.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Combined flux: 0.5*(-20) + 0.5*(-25) = -22.5
+    expected_combined = 0.5 * (-20.0) + 0.5 * (-25.0)
+    @test sol[compiled.F_combined][end] ≈ expected_combined rtol = 1.0e-10
+
+    # Heating is active: F_heat = |F_combined|
+    @test sol[compiled.F_heat][end] ≈ abs(expected_combined) rtol = 1.0e-6
+
+    # Cooling is inactive
+    @test sol[compiled.F_cool][end] ≈ 0.0 atol = 1.0e-10
+end
+
+@testitem "HeatingCoolingFlux - Cooling Active" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = HeatingCoolingFlux()
+    compiled = mtkcompile(sys)
+
+    # T_iB > T_max => cooling active
+    params = Dict(
+        compiled.T_iB => 305.0,
+        compiled.T_iB_min => 290.0,
+        compiled.T_iB_max => 300.0,
+        compiled.F_bottom_n => 30.0,
+        compiled.F_bottom_np1 => 35.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    expected_combined = 0.5 * 30.0 + 0.5 * 35.0
+    @test sol[compiled.F_cool][end] ≈ abs(expected_combined) rtol = 1.0e-6
+    @test sol[compiled.F_heat][end] ≈ 0.0 atol = 1.0e-10
+end
+
+@testitem "HeatingCoolingFlux - No HVAC Needed" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = HeatingCoolingFlux()
+    compiled = mtkcompile(sys)
+
+    # T_min < T_iB < T_max => no heating or cooling
+    params = Dict(
+        compiled.T_iB => 295.0,
+        compiled.T_iB_min => 290.0,
+        compiled.T_iB_max => 300.0,
+        compiled.F_bottom_n => 10.0,
+        compiled.F_bottom_np1 => 12.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    @test sol[compiled.F_heat][end] ≈ 0.0 atol = 1.0e-10
+    @test sol[compiled.F_cool][end] ≈ 0.0 atol = 1.0e-10
+end
+
+# ========================================================================
+# Phase Change Adjustment Tests
+# ========================================================================
+
+@testitem "PhaseChangeAdjustment Interior - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = PhaseChangeAdjustment(; layer_type = :interior)
+
+    @test length(equations(sys)) == 5
+    @test length(unknowns(sys)) == 5
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "PhaseChangeAdjustment Interior - Melting" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = PhaseChangeAdjustment(; layer_type = :interior)
+    compiled = mtkcompile(sys)
+
+    L_f = 3.337e5
+    T_f = 273.15
+    Δt = 3600.0
+    c_i = 2.0e6
+    Δz_i = 0.1
+
+    # Positive H_i means energy available for melting
+    H_i = 50.0  # W/m²
+    w_ice_n = 10.0  # kg/m²
+    w_liq_n = 5.0   # kg/m²
+
+    params = Dict(
+        compiled.H_i => H_i,
+        compiled.w_ice_n => w_ice_n,
+        compiled.w_liq_n => w_liq_n,
+        compiled.Δt => Δt,
+        compiled.c_i => c_i,
+        compiled.Δz_i => Δz_i,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # H_m = H_i * Δt / L_f
+    expected_Hm = H_i * Δt / L_f
+    @test sol[compiled.H_m][end] ≈ expected_Hm rtol = 1.0e-10
+
+    # Ice decreases by melting
+    @test sol[compiled.w_ice_np1][end] < w_ice_n
+
+    # Mass conservation: w_ice + w_liq = const
+    total_before = w_ice_n + w_liq_n
+    total_after = sol[compiled.w_ice_np1][end] + sol[compiled.w_liq_np1][end]
+    @test total_after ≈ total_before rtol = 1.0e-10
+end
+
+@testitem "PhaseChangeAdjustment Interior - Freezing" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = PhaseChangeAdjustment(; layer_type = :interior)
+    compiled = mtkcompile(sys)
+
+    L_f = 3.337e5
+
+    # Negative H_i means energy deficit => freezing
+    H_i = -50.0  # W/m²
+    w_ice_n = 5.0   # kg/m²
+    w_liq_n = 10.0  # kg/m²
+
+    params = Dict(
+        compiled.H_i => H_i,
+        compiled.w_ice_n => w_ice_n,
+        compiled.w_liq_n => w_liq_n,
+        compiled.Δt => 3600.0,
+        compiled.c_i => 2.0e6,
+        compiled.Δz_i => 0.1,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Ice increases by freezing
+    @test sol[compiled.w_ice_np1][end] > w_ice_n
+
+    # Mass conservation
+    total_before = w_ice_n + w_liq_n
+    total_after = sol[compiled.w_ice_np1][end] + sol[compiled.w_liq_np1][end]
+    @test total_after ≈ total_before rtol = 1.0e-10
+end
+
+@testitem "PhaseChangeAdjustment Top - Temperature Correction" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = PhaseChangeAdjustment(; layer_type = :top)
+    compiled = mtkcompile(sys)
+
+    T_f = 273.15
+    L_f = 3.337e5
+    Δt = 3600.0
+    c_i = 2.0e6
+    Δz_i = 0.1
+    dh_dT = -10.0
+
+    # Small melting event
+    H_i = 10.0
+    w_ice_n = 20.0
+    w_liq_n = 5.0
+
+    params = Dict(
+        compiled.H_i => H_i,
+        compiled.w_ice_n => w_ice_n,
+        compiled.w_liq_n => w_liq_n,
+        compiled.Δt => Δt,
+        compiled.c_i => c_i,
+        compiled.Δz_i => Δz_i,
+        compiled.dh_dT => dh_dT,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.65 (top): T = T_f + (Δt/(c*Δz)) * H_res / (1 - (Δt/(c*Δz)) * dh/dT)
+    H_res = sol[compiled.H_residual][end]
+    expected_T = T_f + (Δt / (c_i * Δz_i)) * H_res / (1 - (Δt / (c_i * Δz_i)) * dh_dT)
+    @test sol[compiled.T_np1][end] ≈ expected_T rtol = 1.0e-10
+end
+
+# ========================================================================
+# Snow Melt No Layers Tests
+# ========================================================================
+
+@testitem "SnowMeltNoLayers - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowMeltNoLayers()
+
+    @test length(equations(sys)) == 5
+    @test length(unknowns(sys)) == 5
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "SnowMeltNoLayers - Partial Melt" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowMeltNoLayers()
+    compiled = mtkcompile(sys)
+
+    L_f = 3.337e5
+    H_1 = 50.0    # Excess energy
+    W_sno = 10.0   # Snow mass
+    z_sno = 0.05   # Snow depth
+    Δt = 3600.0
+
+    params = Dict(
+        compiled.H_1 => H_1,
+        compiled.W_sno_n => W_sno,
+        compiled.z_sno_n => z_sno,
+        compiled.Δt => Δt,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.66: W_sno^{n+1} = max(W_sno - H_1*Δt/L_f, 0)
+    expected_W = max(W_sno - H_1 * Δt / L_f, 0)
+    @test sol[compiled.W_sno_np1][end] ≈ expected_W rtol = 1.0e-10
+
+    # Snow decreased
+    @test sol[compiled.W_sno_np1][end] < W_sno
+
+    # Eq. 4.67: z_sno^{n+1} = (W^{n+1}/W^n) * z^n
+    expected_z = (expected_W / W_sno) * z_sno
+    @test sol[compiled.z_sno_np1][end] ≈ expected_z rtol = 1.0e-10
+
+    # Melt rate positive
+    @test sol[compiled.M_1S][end] > 0
+
+    # Eq. 4.71: E_p = L_f * M_1S
+    @test sol[compiled.E_p1S][end] ≈ L_f * sol[compiled.M_1S][end] rtol = 1.0e-10
+end
+
+@testitem "SnowMeltNoLayers - Complete Melt" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowMeltNoLayers()
+    compiled = mtkcompile(sys)
+
+    L_f = 3.337e5
+    # Large excess energy that would melt all snow
+    H_1 = 500.0
+    W_sno = 0.5    # Small snow mass
+    z_sno = 0.002
+    Δt = 3600.0
+
+    params = Dict(
+        compiled.H_1 => H_1,
+        compiled.W_sno_n => W_sno,
+        compiled.z_sno_n => z_sno,
+        compiled.Δt => Δt,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # All snow melts
+    @test sol[compiled.W_sno_np1][end] ≈ 0.0 atol = 1.0e-10
+    @test sol[compiled.z_sno_np1][end] ≈ 0.0 atol = 1.0e-10
+
+    # Residual energy is positive (excess after melting all snow)
+    @test sol[compiled.H_residual][end] > 0
+end
+
+@testitem "SnowMeltNoLayers - Zero Excess Energy" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowMeltNoLayers()
+    compiled = mtkcompile(sys)
+
+    # No excess energy => no melting
+    params = Dict(
+        compiled.H_1 => 0.0,
+        compiled.W_sno_n => 5.0,
+        compiled.z_sno_n => 0.03,
+        compiled.Δt => 3600.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Snow unchanged
+    @test sol[compiled.W_sno_np1][end] ≈ 5.0 rtol = 1.0e-10
+    @test sol[compiled.z_sno_np1][end] ≈ 0.03 rtol = 1.0e-10
+    @test sol[compiled.M_1S][end] ≈ 0.0 atol = 1.0e-10
+end
+
+# ========================================================================
 # Urban Surface Thermal Properties Tests
 # ========================================================================
 

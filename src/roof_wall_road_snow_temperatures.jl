@@ -2,6 +2,8 @@ export SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperti
     InterfaceThermalConductivity, HeatFlux,
     SurfaceEnergyFlux, BuildingTemperature, WasteHeatAirConditioning,
     PhaseChangeEnergy, SnowLayerGeometry,
+    WasteHeatAllocation, AdjustedLayerThickness, HeatingCoolingFlux,
+    PhaseChangeAdjustment, SnowMeltNoLayers,
     RoofWallHeatConduction, RoadHeatConduction
 
 using MethodOfLines
@@ -528,6 +530,272 @@ thermal storage are included.
                         (c_i * Δz_i / Δt) * (T_f - T_i_n),
         ]
     end
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    WasteHeatAllocation(; name=:WasteHeatAllocation)
+
+Allocates total waste heat and air conditioning heat to individual urban surfaces,
+following Eq. 4.27 of Oleson et al. (2010).
+
+Waste heat and air conditioning are applied ONLY to the pervious and impervious road
+surfaces (divided by `1 - W_roof`). Walls and roof receive zero waste heat and zero
+air conditioning.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eq. 4.27, pp. 97.
+"""
+@component function WasteHeatAllocation(; name = :WasteHeatAllocation)
+
+    @parameters begin
+        H_wasteheat, [description = "Total waste heat (Eq. 4.55)", unit = u"W/m^2"]
+        H_aircond, [description = "Total heat removed by air conditioning (Eq. 4.56)", unit = u"W/m^2"]
+        W_roof, [description = "Roof fraction (dimensionless)"]
+    end
+
+    @variables begin
+        H_wasteheat_prvrd(t), [description = "Waste heat to pervious road (Eq. 4.27)", unit = u"W/m^2"]
+        H_wasteheat_imprvrd(t), [description = "Waste heat to impervious road (Eq. 4.27)", unit = u"W/m^2"]
+        H_aircond_prvrd(t), [description = "Air conditioning heat to pervious road (Eq. 4.27)", unit = u"W/m^2"]
+        H_aircond_imprvrd(t), [description = "Air conditioning heat to impervious road (Eq. 4.27)", unit = u"W/m^2"]
+    end
+
+    eqs = [
+        # Eq. 4.27: H_{wasteheat,prvrd} = H_{wasteheat,imprvrd} = H_wasteheat / (1 - W_roof)
+        H_wasteheat_prvrd ~ H_wasteheat / (1 - W_roof),
+        H_wasteheat_imprvrd ~ H_wasteheat / (1 - W_roof),
+
+        # Eq. 4.27: H_{aircond,prvrd} = H_{aircond,imprvrd} = H_aircond / (1 - W_roof)
+        H_aircond_prvrd ~ H_aircond / (1 - W_roof),
+        H_aircond_imprvrd ~ H_aircond / (1 - W_roof),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    AdjustedLayerThickness(; name=:AdjustedLayerThickness)
+
+Computes the adjusted top layer thickness for pervious and impervious road surfaces,
+following Eq. 4.30 of Oleson et al. (2010).
+
+The adjustment uses a tunable parameter `c_a = 0.34` to compensate for the difference
+between layer-averaged and surface temperature in the numerical scheme.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eq. 4.30, pp. 98.
+"""
+@component function AdjustedLayerThickness(; name = :AdjustedLayerThickness)
+
+    @constants begin
+        c_a = 0.34, [description = "Tunable parameter from Z.-L. Yang (1998) (dimensionless)"]
+    end
+
+    @parameters begin
+        z_i, [description = "Node depth of top layer i", unit = u"m"]
+        z_h_im1, [description = "Interface depth above layer i (z_{h,i-1})", unit = u"m"]
+        z_ip1, [description = "Node depth of layer i+1", unit = u"m"]
+    end
+
+    @variables begin
+        Δz_star(t), [description = "Adjusted top layer thickness (Eq. 4.30)", unit = u"m"]
+    end
+
+    eqs = [
+        # Eq. 4.30: Δz_{i*} = 0.5 * [z_i - z_{h,i-1} + c_a*(z_{i+1} - z_{h,i-1})]
+        Δz_star ~ 0.5 * (z_i - z_h_im1 + c_a * (z_ip1 - z_h_im1)),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    HeatingCoolingFlux(; name=:HeatingCoolingFlux)
+
+Computes the heating and cooling fluxes applied to roofs, sunlit walls, and shaded walls,
+following Eqs. 4.51–4.54 of Oleson et al. (2010).
+
+Heating is applied when the internal building temperature `T_iB` falls below the
+prescribed minimum `T_{iB,min}`. Cooling is applied when `T_iB` exceeds the prescribed
+maximum `T_{iB,max}`.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.51–4.54, pp. 101.
+"""
+@component function HeatingCoolingFlux(; name = :HeatingCoolingFlux)
+
+    @constants begin
+        α_CN = 0.5, [description = "Crank-Nicholson weight (dimensionless)"]
+        zero_flux = 0.0, [description = "Zero flux reference", unit = u"W/m^2"]
+    end
+
+    @parameters begin
+        T_iB, [description = "Internal building temperature (Eq. 4.37)", unit = u"K"]
+        T_iB_min, [description = "Minimum prescribed building temperature", unit = u"K"]
+        T_iB_max, [description = "Maximum prescribed building temperature", unit = u"K"]
+        F_bottom_n, [description = "Bottom heat flux at time n (Eq. 4.53)", unit = u"W/m^2"]
+        F_bottom_np1, [description = "Bottom heat flux at time n+1 (Eq. 4.54)", unit = u"W/m^2"]
+    end
+
+    @variables begin
+        F_combined(t), [description = "Combined bottom flux (α*F^n + (1-α)*F^{n+1})", unit = u"W/m^2"]
+        F_heat(t), [description = "Heating flux (Eq. 4.51)", unit = u"W/m^2"]
+        F_cool(t), [description = "Cooling flux (Eq. 4.52)", unit = u"W/m^2"]
+    end
+
+    eqs = [
+        # Combined flux: α*F^n + (1-α)*F^{n+1}
+        F_combined ~ α_CN * F_bottom_n + (1 - α_CN) * F_bottom_np1,
+
+        # Eq. 4.51: F_heat = |combined flux| if T_iB < T_min, else 0
+        F_heat ~ ifelse(T_iB < T_iB_min, abs(F_combined), zero_flux),
+
+        # Eq. 4.52: F_cool = |combined flux| if T_iB > T_max, else 0
+        F_cool ~ ifelse(T_iB > T_iB_max, abs(F_combined), zero_flux),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    PhaseChangeAdjustment(; name=:PhaseChangeAdjustment)
+
+Performs the ice/liquid water mass adjustment and temperature correction after
+phase change, following Eqs. 4.60–4.65 of Oleson et al. (2010).
+
+Given the excess/deficit energy `H_i` from Eq. 4.59, this component computes
+the melt/freeze amount `H_m`, adjusts ice mass, conserves liquid water, computes
+residual energy `H_{i*}`, and corrects the temperature.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.60–4.65, pp. 103–104.
+"""
+@component function PhaseChangeAdjustment(; name = :PhaseChangeAdjustment, layer_type = :interior)
+
+    @constants begin
+        T_f = 273.15, [description = "Freezing temperature of water (Table 1.4)", unit = u"K"]
+        L_f = 3.337e5, [description = "Latent heat of fusion (Table 1.4)", unit = u"J/kg"]
+        zero_kgm2 = 0.0, [description = "Zero mass reference", unit = u"kg/m^2"]
+    end
+
+    @parameters begin
+        H_i, [description = "Excess/deficit energy for phase change (Eq. 4.59)", unit = u"W/m^2"]
+        w_ice_n, [description = "Ice mass at time n", unit = u"kg/m^2"]
+        w_liq_n, [description = "Liquid water mass at time n", unit = u"kg/m^2"]
+        Δt, [description = "Time step", unit = u"s"]
+        c_i, [description = "Volumetric heat capacity", unit = u"J/(m^3*K)"]
+        Δz_i, [description = "Layer thickness", unit = u"m"]
+    end
+
+    @variables begin
+        H_m(t), [description = "Mass change potential H_i*Δt/L_f (Eq. 4.60)", unit = u"kg/m^2"]
+        w_ice_np1(t), [description = "Ice mass at time n+1 (Eqs. 4.60-4.62)", unit = u"kg/m^2"]
+        w_liq_np1(t), [description = "Liquid water mass at time n+1 (Eq. 4.63)", unit = u"kg/m^2"]
+        H_residual(t), [description = "Residual energy after phase change (Eq. 4.64)", unit = u"W/m^2"]
+        T_np1(t), [description = "Corrected temperature (Eq. 4.65)", unit = u"K"]
+    end
+
+    if layer_type == :top
+        @parameters begin
+            dh_dT, [description = "Derivative of surface heat flux", unit = u"W/(m^2*K)"]
+        end
+
+        eqs = [
+            # H_m = H_i * Δt / L_f
+            H_m ~ H_i * Δt / L_f,
+
+            # Eq. 4.60 (melting) / Eq. 4.61 (freezing): adjust ice mass
+            # For melting (H_m > 0): w_ice^{n+1} = max(w_ice^n - H_m, 0)
+            # For freezing (H_m < 0): w_ice^{n+1} = min(w_liq^n + w_ice^n, w_ice^n - H_m)
+            w_ice_np1 ~ ifelse(H_m > zero_kgm2,
+                max(w_ice_n - H_m, zero_kgm2),
+                min(w_liq_n + w_ice_n, w_ice_n - H_m)),
+
+            # Eq. 4.63: w_liq^{n+1} = max(w_liq^n + w_ice^n - w_ice^{n+1}, 0)
+            w_liq_np1 ~ max(w_liq_n + w_ice_n - w_ice_np1, zero_kgm2),
+
+            # Eq. 4.64: H_{i*} = H_i - L_f * (w_ice^n - w_ice^{n+1}) / Δt
+            H_residual ~ H_i - L_f * (w_ice_n - w_ice_np1) / Δt,
+
+            # Eq. 4.65 (top layer): T^{n+1} = T_f + (Δt/(c*Δz)) * H_{i*} / (1 - Δt/(c*Δz) * ∂h/∂T)
+            T_np1 ~ T_f + (Δt / (c_i * Δz_i)) * H_residual / (1 - (Δt / (c_i * Δz_i)) * dh_dT),
+        ]
+    else
+        eqs = [
+            H_m ~ H_i * Δt / L_f,
+
+            w_ice_np1 ~ ifelse(H_m > zero_kgm2,
+                max(w_ice_n - H_m, zero_kgm2),
+                min(w_liq_n + w_ice_n, w_ice_n - H_m)),
+
+            w_liq_np1 ~ max(w_liq_n + w_ice_n - w_ice_np1, zero_kgm2),
+
+            H_residual ~ H_i - L_f * (w_ice_n - w_ice_np1) / Δt,
+
+            # Eq. 4.65 (interior layers): T^{n+1} = T_f + (Δt/(c*Δz)) * H_{i*}
+            T_np1 ~ T_f + (Δt / (c_i * Δz_i)) * H_residual,
+        ]
+    end
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    SnowMeltNoLayers(; name=:SnowMeltNoLayers)
+
+Handles the special case of snow melt when snow is present (W_sno > 0) but there
+are no explicit snow layers (snl = 0), following Eqs. 4.66–4.71 of Oleson et al. (2010).
+
+When the snow mass is too small for explicit snow layers, snow melt is computed
+from the excess energy in the top soil layer. Snow mass and depth are reduced
+proportionally.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.66–4.71, pp. 105.
+"""
+@component function SnowMeltNoLayers(; name = :SnowMeltNoLayers)
+
+    @constants begin
+        L_f = 3.337e5, [description = "Latent heat of fusion (Table 1.4)", unit = u"J/kg"]
+        zero_kgm2 = 0.0, [description = "Zero mass reference", unit = u"kg/m^2"]
+        zero_m = 0.0, [description = "Zero depth reference", unit = u"m"]
+    end
+
+    @parameters begin
+        H_1, [description = "Excess energy in top soil layer", unit = u"W/m^2"]
+        W_sno_n, [description = "Snow mass at time n", unit = u"kg/m^2"]
+        z_sno_n, [description = "Snow depth at time n", unit = u"m"]
+        Δt, [description = "Time step", unit = u"s"]
+    end
+
+    @variables begin
+        W_sno_np1(t), [description = "Snow mass at time n+1 (Eq. 4.66)", unit = u"kg/m^2"]
+        z_sno_np1(t), [description = "Snow depth at time n+1 (Eq. 4.67)", unit = u"m"]
+        H_residual(t), [description = "Residual energy after snow melt (Eq. 4.68)", unit = u"W/m^2"]
+        M_1S(t), [description = "Snow melt rate (Eq. 4.70)", unit = u"kg/(m^2*s)"]
+        E_p1S(t), [description = "Phase change energy (Eq. 4.71)", unit = u"W/m^2"]
+    end
+
+    eqs = [
+        # Eq. 4.66: W_sno^{n+1} = max(W_sno^n - H_1*Δt/L_f, 0)
+        W_sno_np1 ~ max(W_sno_n - H_1 * Δt / L_f, zero_kgm2),
+
+        # Eq. 4.67: z_sno^{n+1} = (W_sno^{n+1} / W_sno^n) * z_sno^n
+        z_sno_np1 ~ ifelse(W_sno_n > zero_kgm2,
+            (W_sno_np1 / W_sno_n) * z_sno_n,
+            zero_m),
+
+        # Eq. 4.68: H_{1*} = H_1 - L_f * (W_sno^n - W_sno^{n+1}) / Δt
+        H_residual ~ H_1 - L_f * (W_sno_n - W_sno_np1) / Δt,
+
+        # Eq. 4.70: M_{1S} = max((W_sno^n - W_sno^{n+1}) / Δt, 0)
+        M_1S ~ max((W_sno_n - W_sno_np1) / Δt, zero_kgm2 / Δt),
+
+        # Eq. 4.71: E_{p,1S} = L_f * M_{1S}
+        E_p1S ~ L_f * M_1S,
+    ]
 
     return System(eqs, t; name)
 end

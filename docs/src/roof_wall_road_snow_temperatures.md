@@ -28,8 +28,18 @@ The implementation provides modular components for:
    temperature (Eqs. 4.37–4.38)
 8. **Waste heat and air conditioning**: HVAC waste heat distribution and air
    conditioning heat removal (Eqs. 4.55–4.56)
-9. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
-   (Eq. 4.59)
+9. **Waste heat allocation**: Distribution of waste heat and AC to pervious and
+   impervious road surfaces (Eq. 4.27)
+10. **Adjusted layer thickness**: Road top layer thickness adjustment for
+    numerical accuracy (Eq. 4.30)
+11. **Heating/cooling flux**: HVAC heating and cooling fluxes based on building
+    temperature vs prescribed limits (Eqs. 4.51–4.54)
+12. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
+    (Eq. 4.59)
+13. **Phase change adjustment**: Ice/liquid mass adjustment and temperature
+    correction after phase change (Eqs. 4.60–4.65)
+14. **Snow melt without layers**: Snow melt when snow is present but has no
+    explicit layers (Eqs. 4.66–4.71)
 
 **Reference**: Oleson, K.W., G.B. Bonan, J.J. Feddema, M. Vertenstein, and E. Kluzek,
 2010: Technical Description of an Urban Parameterization for the Community Land Model
@@ -46,7 +56,12 @@ HeatFlux
 SurfaceEnergyFlux
 BuildingTemperature
 WasteHeatAirConditioning
+WasteHeatAllocation
+AdjustedLayerThickness
+HeatingCoolingFlux
 PhaseChangeEnergy
+PhaseChangeAdjustment
+SnowMeltNoLayers
 RoofWallHeatConduction
 RoadHeatConduction
 ```
@@ -114,6 +129,91 @@ DataFrame(
 
 ```@example ch4_temps
 eqs = equations(sys_snow)
+```
+
+#### Waste Heat Allocation
+
+```@example ch4_temps
+sys_wha = WasteHeatAllocation()
+
+vars = unknowns(sys_wha)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_wha)
+```
+
+#### Adjusted Layer Thickness
+
+```@example ch4_temps
+sys_alt = AdjustedLayerThickness()
+
+vars = unknowns(sys_alt)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_alt)
+```
+
+#### Heating/Cooling Flux
+
+```@example ch4_temps
+sys_hcf = HeatingCoolingFlux()
+
+vars = unknowns(sys_hcf)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_hcf)
+```
+
+#### Phase Change Adjustment
+
+```@example ch4_temps
+sys_pca = PhaseChangeAdjustment(; layer_type=:interior)
+
+vars = unknowns(sys_pca)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_pca)
+```
+
+#### Snow Melt Without Layers
+
+```@example ch4_temps
+sys_sml = SnowMeltNoLayers()
+
+vars = unknowns(sys_sml)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_sml)
 ```
 
 ## Analysis
