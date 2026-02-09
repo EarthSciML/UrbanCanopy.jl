@@ -28,6 +28,20 @@ The implementation provides modular components for:
 10. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
     (Eq. 4.59)
 
+### Design Note: Manual Discretization vs. PDE Framework
+
+The underlying physics is a 1D heat conduction PDE (Eq. 4.4):
+``c \frac{\partial T}{\partial t} = \frac{\partial}{\partial z}\!\left[\lambda \frac{\partial T}{\partial z}\right]``
+which could in principle be implemented as a `PDESystem` and discretized automatically
+via MethodOfLines.jl. However, the domain is very small — each surface column has only
+**15 soil/building layers** (uniform 0.02 m spacing for a 0.3 m roof, or exponential
+spacing to a few meters for roads) plus up to **5 snow layers**. At most 20 elements
+per column, with 5 independent columns (roof, sunlit wall, shaded wall, pervious road,
+impervious road). This is essentially a thermal resistance network through a building
+envelope or shallow soil profile, not a large-domain PDE problem. The manual
+Crank-Nicholson discretization with tridiagonal coefficients — matching the original
+CLM Fortran implementation — is the natural and efficient approach for this scale.
+
 **Reference**: Oleson, K.W., G.B. Bonan, J.J. Feddema, M. Vertenstein, and E. Kluzek,
 2010: Technical Description of an Urban Parameterization for the Community Land Model
 (CLMU). NCAR Technical Note NCAR/TN-480+STR, National Center for Atmospheric Research,
