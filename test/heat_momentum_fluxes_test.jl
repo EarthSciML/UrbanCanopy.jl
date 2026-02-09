@@ -617,8 +617,10 @@ end
 
     # Partial derivatives should have reasonable magnitudes
     # Typical values are O(1-100) W/(m²·K)
-    for var in [compiled.dH_roof_dT, compiled.dH_prvrd_dT, compiled.dH_imprvrd_dT,
-                compiled.dH_sunwall_dT, compiled.dH_shdwall_dT]
+    for var in [
+            compiled.dH_roof_dT, compiled.dH_prvrd_dT, compiled.dH_imprvrd_dT,
+            compiled.dH_sunwall_dT, compiled.dH_shdwall_dT,
+        ]
         @test sol[var][end] > 0.1    # Not too small
         @test sol[var][end] < 1000.0  # Not too large
     end

@@ -329,9 +329,11 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         local X_pos = max(X_dimless, 0.0)
 
         # w* = u* * X^{1/3} for unstable (ζ < 0), 0 for stable
-        local w_star = ifelse(ζ_in < 0,
+        local w_star = ifelse(
+            ζ_in < 0,
             u_star_init * X_pos^(1 / 3),
-            zero_ms)
+            zero_ms
+        )
 
         push!(eqs, U_c ~ β_conv * w_star)                                         # Eq. 3.29
     end
@@ -474,25 +476,35 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         local cₕ_sum = c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall
 
         # For each surface, the numerator of dH/dT includes all OTHER conductances + c_a_h
-        push!(eqs, dH_roof_dT ~ ρ_atm * C_p *                                    # Eq. 3.95
-            (c_a_h + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
-            cₕ_roof / (W_roof * cₕ_sum))
+        push!(
+            eqs, dH_roof_dT ~ ρ_atm * C_p *                                    # Eq. 3.95
+                (c_a_h + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
+                cₕ_roof / (W_roof * cₕ_sum)
+        )
 
-        push!(eqs, dH_prvrd_dT ~ ρ_atm * C_p *                                   # Eq. 3.96
-            (c_a_h + cₕ_roof + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
-            cₕ_prvrd / (((1 - W_roof) * f_prvrd) * cₕ_sum))
+        push!(
+            eqs, dH_prvrd_dT ~ ρ_atm * C_p *                                   # Eq. 3.96
+                (c_a_h + cₕ_roof + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
+                cₕ_prvrd / (((1 - W_roof) * f_prvrd) * cₕ_sum)
+        )
 
-        push!(eqs, dH_imprvrd_dT ~ ρ_atm * C_p *                                 # Eq. 3.97
-            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_sunwall + cₕ_shdwall) *
-            cₕ_imprvrd / (((1 - W_roof) * (1 - f_prvrd)) * cₕ_sum))
+        push!(
+            eqs, dH_imprvrd_dT ~ ρ_atm * C_p *                                 # Eq. 3.97
+                (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_sunwall + cₕ_shdwall) *
+                cₕ_imprvrd / (((1 - W_roof) * (1 - f_prvrd)) * cₕ_sum)
+        )
 
-        push!(eqs, dH_sunwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.98
-            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_shdwall) *
-            cₕ_sunwall / (((1 - W_roof) * H_W) * cₕ_sum))
+        push!(
+            eqs, dH_sunwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.98
+                (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_shdwall) *
+                cₕ_sunwall / (((1 - W_roof) * H_W) * cₕ_sum)
+        )
 
-        push!(eqs, dH_shdwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.99
-            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall) *
-            cₕ_shdwall / (((1 - W_roof) * H_W) * cₕ_sum))
+        push!(
+            eqs, dH_shdwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.99
+                (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall) *
+                cₕ_shdwall / (((1 - W_roof) * H_W) * cₕ_sum)
+        )
     end
 
     return System(eqs, t; name)
