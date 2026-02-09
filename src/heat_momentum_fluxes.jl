@@ -52,6 +52,8 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     @constants begin
         β_conv = 1.0, [description = "Convective velocity coefficient (Eq. 3.29) (dimensionless)"]
         z_i = 1000.0, [description = "Convective boundary layer height (Eq. 3.30)", unit = u"m"]
+        zero_61 = 0.61, [description = "Virtual temperature coefficient (dimensionless)"]
+        one_m = 1.0, [description = "Unit length for non-dimensionalization", unit = u"m"]
     end
 
     # Surface resistance coefficients (Eq. 3.68, Rowley et al. 1930)
@@ -200,6 +202,22 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         c_a_w(t), [description = "Latent heat conductance UCL to atmosphere (1/r_aw)", unit = u"m/s"]
     end
 
+    # Convective velocity (Eqs. 3.29-3.30)
+    @variables begin
+        U_c(t), [description = "Convective velocity (Eq. 3.29)", unit = u"m/s"]
+        θ_v_atm(t), [description = "Virtual potential temperature at reference height (dimensionless)", unit = u"K"]
+    end
+
+    # ===== Partial Derivatives of Fluxes (Section 3.2.4, Eqs. 3.95-3.104) =====
+
+    @variables begin
+        dH_roof_dT(t), [description = "∂H_roof/∂T_g,roof (Eq. 3.95)", unit = u"W/(m^2*K)"]
+        dH_prvrd_dT(t), [description = "∂H_prvrd/∂T_g,prvrd (Eq. 3.96)", unit = u"W/(m^2*K)"]
+        dH_imprvrd_dT(t), [description = "∂H_imprvrd/∂T_g,imprvrd (Eq. 3.97)", unit = u"W/(m^2*K)"]
+        dH_sunwall_dT(t), [description = "∂H_sunwall/∂T_g,sunwall (Eq. 3.98)", unit = u"W/(m^2*K)"]
+        dH_shdwall_dT(t), [description = "∂H_shdwall/∂T_g,shdwall (Eq. 3.99)", unit = u"W/(m^2*K)"]
+    end
+
     eqs = Equation[]
 
     # ===== Roughness Length and Displacement Height (Section 3.2.1, Eqs. 3.55-3.58) =====
@@ -281,13 +299,45 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, ψ_w_atm ~ _ψ_h(ζ_w))   # φ_w = φ_h, so ψ_w = ψ_h (Eq. 3.32)
     push!(eqs, ψ_w_0 ~ _ψ_h(ζ_0w))
 
+    # ===== Virtual Potential Temperature =====
+    push!(eqs, θ_v_atm ~ θ_atm * (1 + zero_61 * q_atm))                          # θ_v,atm = θ̄_atm(1 + 0.61*q_atm)
+
+    # ===== Convective Velocity (Eqs. 3.29-3.30) =====
+    # U_c = 0 for stable (ζ ≥ 0), U_c = β*w* for unstable (ζ < 0)
+    # w* = (-g*u*_star*θ_v*_star*z_i / θ_v,atm)^{1/3} (Eq. 3.30)
+    # Since ζ_in is given as input, we can compute L and from it θ_v*:
+    #   L = u*²θ_v,atm / (k*g*θ_v*) (Eq. 3.17 rearranged), so θ_v* = u*²θ_v,atm/(k*g*L)
+    # Then w* = (-g * u* * θ_v* * z_i / θ_v,atm)^{1/3}
+    #         = (-g * u* * u*² θ_v,atm / (k*g*L) * z_i / θ_v,atm)^{1/3}
+    #         = (-u*³ * z_i / (k * L))^{1/3}
+    # For unstable conditions L < 0, so -z_i/(k*L) > 0 and the cube root is real.
+    # We use the simplified approach: compute U_c after u_star is known.
+    # To break the V_a → u_star → U_c → V_a loop, we use V_r (without U_c) to get
+    # the initial u_star, then compute U_c from that u_star and include it in V_a.
+    # This is consistent with the iterative approach described in Section 3.2.3.
+    begin
+        # Compute u_star from V_r first (no convective velocity) for the U_c calculation
+        local u_star_init = max(
+            k_vk * V_r /
+                (log((z_atm_m - d_canopy) / z_0m_canopy) - ψ_m_atm + ψ_m_0), 0.01 * one_ms
+        )
+
+        # w* = u* * (-z_i * ζ_in / (k * (z_atm_m - d)))^{1/3}  (Eq. 3.30 simplified)
+        # The ratio X = z_i / (z_atm_m - d) * (-ζ_in) / k is dimensionless.
+        # Non-dimensionalize z_i and (z_atm_m - d) with one_m to help the unit checker.
+        local X_dimless = (z_i / one_m) / ((z_atm_m - d_canopy) / one_m) * (-ζ_in) / k_vk
+        local X_pos = max(X_dimless, 0.0)
+
+        # w* = u* * X^{1/3} for unstable (ζ < 0), 0 for stable
+        local w_star = ifelse(ζ_in < 0,
+            u_star_init * X_pos^(1 / 3),
+            zero_ms)
+
+        push!(eqs, U_c ~ β_conv * w_star)                                         # Eq. 3.29
+    end
+
     # ===== Effective Wind Speed (Eq. 3.25) =====
-    # V_a includes convective velocity for unstable conditions.
-    # For simplicity and to avoid the circular loop, we compute U_c from the
-    # MO parameters. Since θ_v* = θ_*(1+0.61q) + 0.61θ̄q_*, and the scales
-    # depend on V_a, we use the simplified form V_a = max(V_r, 1).
-    # The convective velocity correction is small compared to mean wind.
-    push!(eqs, V_a ~ max(sqrt(u_atm^2 + v_atm^2), one_ms))                       # Eq. 3.25 (simplified)
+    push!(eqs, V_a ~ max(sqrt(u_atm^2 + v_atm^2 + U_c^2), one_ms))              # Eq. 3.25
 
     # ===== Friction Velocity (Eq. 3.26) =====
     push!(
@@ -401,6 +451,49 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     # ===== Momentum Fluxes (Eqs. 3.6-3.7) =====
     push!(eqs, τ_x ~ -ρ_atm * u_atm / r_am)                                      # Eq. 3.6
     push!(eqs, τ_y ~ -ρ_atm * v_atm / r_am)                                      # Eq. 3.7
+
+    # ===== Partial Derivatives of Sensible Heat Fluxes (Eqs. 3.95-3.99) =====
+    # These are needed for the implicit soil temperature calculation (Chapter 4)
+    # and for the flux update equations (Eqs. 3.106-3.107).
+    #
+    # The general form is (Eq. 3.95):
+    # ∂H_g/∂T_g = ρ_atm * C_p * (c_a^h + Σ c_i/W_i [excluding surface g]) * c_g / W_g
+    #             / (c_a^h + Σ c_i/W_i [all surfaces])
+    # where c_i = conductance for surface i, W_i = area weight for surface i
+
+    begin
+        # Define conductances per unit area (c_i / W_i = 1 / r_s_u for all surfaces)
+        # and area-weighted conductances c_i = W_i / r_s_u
+        local cₕ_roof = W_roof / r_s_u
+        local cₕ_prvrd = (1 - W_roof) * f_prvrd / r_s_u
+        local cₕ_imprvrd = (1 - W_roof) * (1 - f_prvrd) / r_s_u
+        local cₕ_sunwall = (1 - W_roof) * H_W / r_s_u
+        local cₕ_shdwall = (1 - W_roof) * H_W / r_s_u
+
+        # Sum of all conductances (denominator in Eq. 3.75)
+        local cₕ_sum = c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall
+
+        # For each surface, the numerator of dH/dT includes all OTHER conductances + c_a_h
+        push!(eqs, dH_roof_dT ~ ρ_atm * C_p *                                    # Eq. 3.95
+            (c_a_h + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
+            cₕ_roof / (W_roof * cₕ_sum))
+
+        push!(eqs, dH_prvrd_dT ~ ρ_atm * C_p *                                   # Eq. 3.96
+            (c_a_h + cₕ_roof + cₕ_imprvrd + cₕ_sunwall + cₕ_shdwall) *
+            cₕ_prvrd / (((1 - W_roof) * f_prvrd) * cₕ_sum))
+
+        push!(eqs, dH_imprvrd_dT ~ ρ_atm * C_p *                                 # Eq. 3.97
+            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_sunwall + cₕ_shdwall) *
+            cₕ_imprvrd / (((1 - W_roof) * (1 - f_prvrd)) * cₕ_sum))
+
+        push!(eqs, dH_sunwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.98
+            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_shdwall) *
+            cₕ_sunwall / (((1 - W_roof) * H_W) * cₕ_sum))
+
+        push!(eqs, dH_shdwall_dT ~ ρ_atm * C_p *                                 # Eq. 3.99
+            (c_a_h + cₕ_roof + cₕ_prvrd + cₕ_imprvrd + cₕ_sunwall) *
+            cₕ_shdwall / (((1 - W_roof) * H_W) * cₕ_sum))
+    end
 
     return System(eqs, t; name)
 end

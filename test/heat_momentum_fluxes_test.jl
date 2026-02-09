@@ -56,10 +56,10 @@ end
     sys = HeatMomentumFluxes()
 
     # Verify equation count
-    @test length(equations(sys)) == 41
+    @test length(equations(sys)) == 48
 
     # Verify unknown count
-    @test length(unknowns(sys)) == 41
+    @test length(unknowns(sys)) == 48
 
     # Verify key unknown names
     unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
@@ -121,6 +121,17 @@ end
     @test "c_a_h" in unk_names
     @test "c_a_w" in unk_names
 
+    # Convective velocity
+    @test "U_c" in unk_names
+    @test "θ_v_atm" in unk_names
+
+    # Partial derivatives
+    @test "dH_roof_dT" in unk_names
+    @test "dH_prvrd_dT" in unk_names
+    @test "dH_imprvrd_dT" in unk_names
+    @test "dH_sunwall_dT" in unk_names
+    @test "dH_shdwall_dT" in unk_names
+
     # Verify key parameter names
     param_names = Set(string(Symbolics.tosymbol(p, escape = false)) for p in parameters(sys))
     @test "H_W" in param_names
@@ -171,6 +182,13 @@ end
         "q_ac" => u"kg/kg",
         "c_a_h" => u"m/s",
         "c_a_w" => u"m/s",
+        "U_c" => u"m/s",
+        "θ_v_atm" => u"K",
+        "dH_roof_dT" => u"W/(m^2*K)",
+        "dH_prvrd_dT" => u"W/(m^2*K)",
+        "dH_imprvrd_dT" => u"W/(m^2*K)",
+        "dH_sunwall_dT" => u"W/(m^2*K)",
+        "dH_shdwall_dT" => u"W/(m^2*K)",
     )
 
     for v in unknowns(sys)
@@ -550,4 +568,72 @@ end
     z0m = sol[compiled.z_0m_canopy][end]
     u_star_neutral = 0.4 * V_a / log((30.0 - d) / z0m)
     @test sol[compiled.u_star][end] ≈ u_star_neutral rtol = 0.05
+end
+
+@testitem "Convective Velocity" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+
+    # Stable conditions (ζ > 0): U_c should be zero
+    params_stable = copy(params)
+    params_stable[compiled.ζ_in] = 0.5
+    sol_stable = solve_system(compiled, params_stable)
+    @test sol_stable[compiled.U_c][end] ≈ 0.0 atol = 1.0e-10
+
+    # V_a should equal V_r for stable conditions (U_c = 0)
+    @test sol_stable[compiled.V_a][end] ≈ sol_stable[compiled.V_r][end] rtol = 1.0e-6
+
+    # Unstable conditions (ζ < 0): U_c should be positive
+    params_unstable = copy(params)
+    params_unstable[compiled.ζ_in] = -0.5
+    sol_unstable = solve_system(compiled, params_unstable)
+    @test sol_unstable[compiled.U_c][end] > 0.0
+
+    # V_a should be larger than V_r for unstable conditions (U_c > 0)
+    @test sol_unstable[compiled.V_a][end] > sol_unstable[compiled.V_r][end]
+
+    # More unstable conditions should give larger U_c
+    params_very_unstable = copy(params)
+    params_very_unstable[compiled.ζ_in] = -2.0
+    sol_vu = solve_system(compiled, params_very_unstable)
+    @test sol_vu[compiled.U_c][end] > sol_unstable[compiled.U_c][end]
+
+    # Virtual potential temperature (θ_v = θ(1 + 0.61*q))
+    θ_v = sol_stable[compiled.θ_v_atm][end]
+    @test θ_v ≈ 300.0 * (1 + 0.61 * 0.01) rtol = 1.0e-6
+end
+
+@testitem "Partial Derivatives of Sensible Heat" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+    sol = solve_system(compiled, params)
+
+    # All partial derivatives should be positive (warming surface increases upward heat flux)
+    @test sol[compiled.dH_roof_dT][end] > 0.0
+    @test sol[compiled.dH_prvrd_dT][end] > 0.0
+    @test sol[compiled.dH_imprvrd_dT][end] > 0.0
+    @test sol[compiled.dH_sunwall_dT][end] > 0.0
+    @test sol[compiled.dH_shdwall_dT][end] > 0.0
+
+    # Partial derivatives should have reasonable magnitudes
+    # Typical values are O(1-100) W/(m²·K)
+    for var in [compiled.dH_roof_dT, compiled.dH_prvrd_dT, compiled.dH_imprvrd_dT,
+                compiled.dH_sunwall_dT, compiled.dH_shdwall_dT]
+        @test sol[var][end] > 0.1    # Not too small
+        @test sol[var][end] < 1000.0  # Not too large
+    end
+
+    # Verify numerical consistency: perturb T_g_roof and check that
+    # the finite difference matches dH_roof_dT
+    ΔT = 0.01
+    params_plus = copy(params)
+    params_plus[compiled.T_g_roof] = 310.0 + ΔT
+    sol_plus = solve_system(compiled, params_plus)
+
+    params_minus = copy(params)
+    params_minus[compiled.T_g_roof] = 310.0 - ΔT
+    sol_minus = solve_system(compiled, params_minus)
+
+    dH_fd = (sol_plus[compiled.H_roof][end] - sol_minus[compiled.H_roof][end]) / (2 * ΔT)
+    @test sol[compiled.dH_roof_dT][end] ≈ dH_fd rtol = 0.01
 end

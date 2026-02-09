@@ -14,20 +14,24 @@ The `HeatMomentumFluxes` component computes:
    very unstable (``\zeta < -1.574``), unstable (``-1.574 \leq \zeta < 0``),
    stable (``0 \leq \zeta \leq 1``), and very stable (``\zeta > 1``)
    (Eqs. 3.31-3.46)
-3. **Friction velocity** ``u_*`` and aerodynamic resistances ``r_{am}``,
+3. **Convective velocity** ``U_c`` for unstable conditions using the convective
+   velocity scale ``w_*`` (Eqs. 3.25, 3.29-3.30)
+4. **Friction velocity** ``u_*`` and aerodynamic resistances ``r_{am}``,
    ``r_{ah}``, ``r_{aw}`` (Eqs. 3.26, 3.65-3.67)
-4. **Canyon wind speed** for three flow regimes: isolated (``H/W < 0.5``),
+5. **Canyon wind speed** for three flow regimes: isolated (``H/W < 0.5``),
    wake interference (``0.5 \leq H/W < 1``), and skimming (``H/W \geq 1``)
    (Eqs. 3.59-3.62)
-5. **Surface resistance** for heat and moisture exchange (Eq. 3.68)
-6. **UCL air temperature and humidity** as conductance-weighted averages
+6. **Surface resistance** for heat and moisture exchange (Eq. 3.68)
+7. **UCL air temperature and humidity** as conductance-weighted averages
    (Eqs. 3.75, 3.93)
-7. **Sensible heat fluxes** for all five surfaces (roof, pervious road,
+8. **Sensible heat fluxes** for all five surfaces (roof, pervious road,
    impervious road, sunlit wall, shaded wall) and the area-weighted total
    (Eqs. 3.69-3.74)
-8. **Water vapor fluxes** for roof, pervious road, and impervious road
+9. **Water vapor fluxes** for roof, pervious road, and impervious road
    (walls have zero evaporation) (Eqs. 3.76-3.81)
-9. **Momentum fluxes** ``\tau_x`` and ``\tau_y`` (Eqs. 3.6-3.7)
+10. **Momentum fluxes** ``\tau_x`` and ``\tau_y`` (Eqs. 3.6-3.7)
+11. **Partial derivatives** ``\partial H / \partial T_g`` for all five surfaces,
+    needed for the implicit soil temperature calculation (Eqs. 3.95-3.99)
 
 The Monin-Obukhov stability parameter ``\zeta`` is taken as an input parameter,
 since in the original CLM implementation it is computed through an iterative
@@ -46,7 +50,7 @@ HeatMomentumFluxes
 ## Implementation
 
 The `HeatMomentumFluxes` component implements the heat and momentum flux
-parameterization with 41 equations and 41 unknowns.
+parameterization with 48 equations and 48 unknowns.
 
 ### State Variables
 
@@ -324,3 +328,84 @@ The aerodynamic resistances ``r_{am}`` and ``r_{ah}`` vary strongly with
 stability, while the surface resistance ``r_s`` shows a weaker dependence
 because it is controlled primarily by the canyon wind speed rather than
 directly by the stability corrections.
+
+### Convective Velocity vs Stability
+
+The convective velocity ``U_c`` (Eqs. 3.29-3.30) augments the effective wind
+speed ``V_a`` under unstable conditions. ``U_c = \beta w_*`` where ``w_*`` is
+the convective velocity scale computed from the friction velocity and the
+Monin-Obukhov length. Under stable conditions ``U_c = 0`` and ``V_a`` reduces
+to the horizontal wind speed.
+
+```@example heat_mom
+ζ_range_uc = -3.0:0.05:1.0
+Uc_vals = Float64[]
+Va_vals = Float64[]
+Vr_vals_stab = Float64[]
+
+for ζ in ζ_range_uc
+    if abs(ζ) < 0.001
+        ζ = sign(ζ) == -1 ? -0.001 : 0.001
+    end
+    p = base_hmf_params(compiled; ζ_in=ζ)
+    sol = solve_hmf(compiled, p)
+    push!(Uc_vals, sol[compiled.U_c][end])
+    push!(Va_vals, sol[compiled.V_a][end])
+    push!(Vr_vals_stab, sol[compiled.V_r][end])
+end
+
+p1 = plot(ζ_range_uc, Uc_vals, label="U_c (convective velocity)", linewidth=2,
+    xlabel="ζ = (z-d)/L", ylabel="Speed (m/s)",
+    title="Convective Velocity and Effective Wind Speed (Eqs. 3.25, 3.29-3.30)",
+    legend=:topright)
+plot!(p1, ζ_range_uc, Va_vals, label="V_a (effective wind)", linewidth=2)
+plot!(p1, ζ_range_uc, Vr_vals_stab, label="V_r (horizontal wind)", linewidth=2, linestyle=:dash)
+vline!(p1, [0.0], linestyle=:dash, color=:gray, label="Neutral")
+p1
+```
+
+Under strongly unstable conditions, the convective velocity can exceed the
+mean horizontal wind, significantly increasing the effective wind speed and
+turbulent exchange.
+
+### Partial Derivatives of Sensible Heat Flux
+
+The partial derivatives ``\partial H / \partial T_g`` (Eqs. 3.95-3.99) quantify
+the sensitivity of each surface's sensible heat flux to changes in its ground
+temperature. These are needed for the implicit coupling with the soil temperature
+equation (Chapter 4). Larger values indicate stronger thermal coupling between
+the surface and the atmosphere.
+
+```@example heat_mom
+hw_range_dH = 0.1:0.1:5.0
+dH_roof_vals = Float64[]
+dH_prvrd_vals = Float64[]
+dH_imprvrd_vals = Float64[]
+dH_sunwall_vals = Float64[]
+dH_shdwall_vals = Float64[]
+
+for hw in hw_range_dH
+    p = base_hmf_params(compiled; H_W=hw)
+    sol = solve_hmf(compiled, p)
+    push!(dH_roof_vals, sol[compiled.dH_roof_dT][end])
+    push!(dH_prvrd_vals, sol[compiled.dH_prvrd_dT][end])
+    push!(dH_imprvrd_vals, sol[compiled.dH_imprvrd_dT][end])
+    push!(dH_sunwall_vals, sol[compiled.dH_sunwall_dT][end])
+    push!(dH_shdwall_vals, sol[compiled.dH_shdwall_dT][end])
+end
+
+p = plot(hw_range_dH, dH_roof_vals, label="∂H_roof/∂T", linewidth=2,
+    xlabel="Canyon H/W Ratio", ylabel="∂H/∂T (W m⁻² K⁻¹)",
+    title="Sensible Heat Flux Derivatives (Eqs. 3.95-3.99)",
+    legend=:right)
+plot!(p, hw_range_dH, dH_prvrd_vals, label="∂H_prvrd/∂T", linewidth=2)
+plot!(p, hw_range_dH, dH_imprvrd_vals, label="∂H_imprvrd/∂T", linewidth=2)
+plot!(p, hw_range_dH, dH_sunwall_vals, label="∂H_sunwall/∂T", linewidth=2)
+plot!(p, hw_range_dH, dH_shdwall_vals, label="∂H_shdwall/∂T", linewidth=2)
+p
+```
+
+The partial derivatives reflect the thermal coupling strength of each surface.
+Surfaces with larger area fractions (e.g., roof) have stronger coupling, while
+the wall derivatives increase with H/W as wall area grows relative to the
+canyon floor.
