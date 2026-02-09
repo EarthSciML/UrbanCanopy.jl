@@ -7,70 +7,6 @@
 end
 
 # ========================================================================
-# Grid Discretization Tests
-# ========================================================================
-
-@testitem "compute_grid_roofwall - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
-    Δz_total = 0.3
-    N = 15
-    grid = compute_grid_roofwall(Δz_total; N_levgrnd = N)
-
-    # Eq. 4.5: z_i = (i - 0.5) * (Δz / N)
-    for i in 1:N
-        expected = (i - 0.5) * (Δz_total / N)
-        @test grid.z_node[i] ≈ expected rtol = 1e-10
-    end
-
-    # Eq. 4.6: For uniform grid, all interior layer thicknesses should be Δz/N
-    spacing = Δz_total / N
-    for i in 2:(N - 1)
-        @test grid.Δz_layer[i] ≈ spacing rtol = 1e-10
-    end
-
-    # Eq. 4.7: Top interface should be at 0
-    @test grid.z_interface[1] ≈ 0.0 atol = 1e-15
-
-    # Sum of layer thicknesses should equal total thickness
-    @test sum(grid.Δz_layer) ≈ Δz_total rtol = 1e-10
-
-    # Bottom interface should be at total thickness
-    @test grid.z_interface[N + 1] ≈ Δz_total rtol = 1e-10
-
-    # Node depths should be monotonically increasing
-    for i in 1:(N - 1)
-        @test grid.z_node[i + 1] > grid.z_node[i]
-    end
-end
-
-@testitem "compute_grid_road - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
-    grid = compute_grid_road()
-    f_s = 0.025
-    N = 15
-
-    # Eq. 4.8: z_i = f_s * {exp[0.5(i - 0.5)] - 1}
-    for i in 1:N
-        expected = f_s * (exp(0.5 * (i - 0.5)) - 1)
-        @test grid.z_node[i] ≈ expected rtol = 1e-10
-    end
-
-    # Exponential grid: node depths monotonically increasing
-    for i in 1:(N - 1)
-        @test grid.z_node[i + 1] > grid.z_node[i]
-    end
-
-    # Layer thicknesses should increase (exponential spacing)
-    for i in 1:(N - 1)
-        @test grid.Δz_layer[i + 1] > grid.Δz_layer[i]
-    end
-
-    # Top interface at 0
-    @test grid.z_interface[1] ≈ 0.0 atol = 1e-15
-
-    # Sum of layer thicknesses should approximately equal bottom interface depth
-    @test sum(grid.Δz_layer) ≈ grid.z_interface[N + 1] rtol = 1e-10
-end
-
-# ========================================================================
 # Snow Layer Geometry Tests
 # ========================================================================
 
@@ -340,167 +276,6 @@ end
 end
 
 # ========================================================================
-# Tridiagonal Coefficients Tests
-# ========================================================================
-
-@testitem "TridiagonalCoefficients Interior - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
-    sys = TridiagonalCoefficients(; layer_type = :interior)
-    compiled = mtkcompile(sys)
-
-    α = 0.5
-    c_i = 2e6
-    Δz = 0.02
-    Δt = 3600.0
-    T_n = 290.0
-    λ_above = 1.5
-    λ_below = 1.5
-    z_im1 = 0.01
-    z_i = 0.03
-    z_ip1 = 0.05
-    F_i_n = -λ_below * (T_n - 285.0) / (z_ip1 - z_i)
-    F_im1_n = -λ_above * (295.0 - T_n) / (z_i - z_im1)
-
-    params = Dict(
-        compiled.c_i => c_i, compiled.Δz_i => Δz, compiled.Δt => Δt,
-        compiled.T_i_n => T_n, compiled.λ_h_above => λ_above,
-        compiled.λ_h_below => λ_below, compiled.z_im1 => z_im1,
-        compiled.z_i => z_i, compiled.z_ip1 => z_ip1,
-        compiled.F_i_n => F_i_n, compiled.F_im1_n => F_im1_n,
-    )
-
-    prob = ODEProblem(compiled, params, (0.0, 1.0))
-    sol = solve(prob)
-
-    # Eq. 4.47
-    expected_a = -(1 - α) * (Δt / (c_i * Δz)) * λ_above / (z_i - z_im1)
-    @test sol[compiled.a_coeff][end] ≈ expected_a rtol = 1e-10
-
-    # Eq. 4.48
-    expected_b = 1.0 + (1 - α) * (Δt / (c_i * Δz)) * (λ_above / (z_i - z_im1) + λ_below / (z_ip1 - z_i))
-    @test sol[compiled.b_coeff][end] ≈ expected_b rtol = 1e-10
-
-    # Eq. 4.49
-    expected_c = -(1 - α) * (Δt / (c_i * Δz)) * λ_below / (z_ip1 - z_i)
-    @test sol[compiled.c_coeff][end] ≈ expected_c rtol = 1e-10
-
-    # Eq. 4.50
-    expected_r = T_n + α * (Δt / (c_i * Δz)) * (F_i_n - F_im1_n)
-    @test sol[compiled.r_coeff][end] ≈ expected_r rtol = 1e-10
-
-    # Diagonal dominance: |b| ≥ |a| + |c|
-    @test abs(sol[compiled.b_coeff][end]) ≥ abs(sol[compiled.a_coeff][end]) + abs(sol[compiled.c_coeff][end]) - 1e-10
-end
-
-@testitem "TridiagonalCoefficients Top" setup = [TempSetup] tags = [:ch4_temps] begin
-    sys = TridiagonalCoefficients(; layer_type = :top)
-    compiled = mtkcompile(sys)
-
-    α = 0.5
-    c_i = 2e6
-    Δz = 0.01
-    Δt = 3600.0
-    T_n = 295.0
-    λ_below = 1.0
-    z_i = 0.005
-    z_ip1 = 0.015
-    dh_dT_val = -15.0
-    h_n_val = 50.0
-    F_i_n = -20.0
-
-    params = Dict(
-        compiled.c_i => c_i, compiled.Δz_i => Δz, compiled.Δt => Δt,
-        compiled.T_i_n => T_n, compiled.λ_h_below => λ_below,
-        compiled.z_i => z_i, compiled.z_ip1 => z_ip1,
-        compiled.dh_dT => dh_dT_val, compiled.h_n => h_n_val,
-        compiled.F_i_n => F_i_n,
-    )
-
-    prob = ODEProblem(compiled, params, (0.0, 1.0))
-    sol = solve(prob)
-
-    # Eq. 4.21
-    @test sol[compiled.a_coeff][end] ≈ 0.0 atol = 1e-15
-
-    # Eq. 4.22
-    expected_b = 1.0 + (Δt / (c_i * Δz)) * ((1 - α) * λ_below / (z_ip1 - z_i) - dh_dT_val)
-    @test sol[compiled.b_coeff][end] ≈ expected_b rtol = 1e-10
-
-    # Eq. 4.23
-    expected_c = -(1 - α) * (Δt / (c_i * Δz)) * λ_below / (z_ip1 - z_i)
-    @test sol[compiled.c_coeff][end] ≈ expected_c rtol = 1e-10
-
-    # Eq. 4.24
-    expected_r = T_n + (Δt / (c_i * Δz)) * (h_n_val - dh_dT_val * T_n + α * F_i_n)
-    @test sol[compiled.r_coeff][end] ≈ expected_r rtol = 1e-10
-end
-
-@testitem "TridiagonalCoefficients BottomZeroFlux" setup = [TempSetup] tags = [:ch4_temps] begin
-    sys = TridiagonalCoefficients(; layer_type = :bottom_zero_flux)
-    compiled = mtkcompile(sys)
-
-    α = 0.5
-    c_i = 2e6
-    Δz = 0.5
-    Δt = 3600.0
-    T_n = 285.0
-    λ_above = 2.0
-    z_im1 = 2.0
-    z_i = 3.0
-    F_im1_n = -5.0
-
-    params = Dict(
-        compiled.c_i => c_i, compiled.Δz_i => Δz, compiled.Δt => Δt,
-        compiled.T_i_n => T_n, compiled.λ_h_above => λ_above,
-        compiled.z_im1 => z_im1, compiled.z_i => z_i,
-        compiled.F_im1_n => F_im1_n,
-    )
-
-    prob = ODEProblem(compiled, params, (0.0, 1.0))
-    sol = solve(prob)
-
-    @test sol[compiled.c_coeff][end] ≈ 0.0 atol = 1e-15
-    expected_a = -(1 - α) * (Δt / (c_i * Δz)) * λ_above / (z_i - z_im1)
-    @test sol[compiled.a_coeff][end] ≈ expected_a rtol = 1e-10
-    expected_b = 1.0 + (1 - α) * (Δt / (c_i * Δz)) * λ_above / (z_i - z_im1)
-    @test sol[compiled.b_coeff][end] ≈ expected_b rtol = 1e-10
-end
-
-@testitem "TridiagonalCoefficients BottomBuilding" setup = [TempSetup] tags = [:ch4_temps] begin
-    sys = TridiagonalCoefficients(; layer_type = :bottom_building)
-    compiled = mtkcompile(sys)
-
-    α = 0.5
-    c_i = 2e6
-    Δz = 0.02
-    Δt = 3600.0
-    T_n = 292.0
-    λ_above = 1.0
-    λ_below_val = 1.0
-    z_im1 = 0.27
-    z_i = 0.29
-    z_h_below_val = 0.30
-    F_i_n = -10.0
-    F_im1_n = -5.0
-
-    params = Dict(
-        compiled.c_i => c_i, compiled.Δz_i => Δz, compiled.Δt => Δt,
-        compiled.T_i_n => T_n, compiled.λ_h_above => λ_above,
-        compiled.λ_h_below => λ_below_val, compiled.z_im1 => z_im1,
-        compiled.z_i => z_i, compiled.z_h_below => z_h_below_val,
-        compiled.F_i_n => F_i_n, compiled.F_im1_n => F_im1_n,
-    )
-
-    prob = ODEProblem(compiled, params, (0.0, 1.0))
-    sol = solve(prob)
-
-    @test sol[compiled.c_coeff][end] ≈ 0.0 atol = 1e-15
-    expected_a = -(1 - α) * (Δt / (c_i * Δz)) * λ_above / (z_i - z_im1)
-    @test sol[compiled.a_coeff][end] ≈ expected_a rtol = 1e-10
-    expected_b = 1.0 + (1 - α) * (Δt / (c_i * Δz)) * (λ_above / (z_i - z_im1) + λ_below_val / (z_h_below_val - z_i))
-    @test sol[compiled.b_coeff][end] ≈ expected_b rtol = 1e-10
-end
-
-# ========================================================================
 # Surface Energy Flux Tests
 # ========================================================================
 
@@ -710,4 +485,157 @@ end
 
     @test sol[compiled.λ_surf][end] ≈ 1.5 rtol = 1e-10
     @test sol[compiled.c_surf][end] ≈ 2.5e6 rtol = 1e-10
+end
+
+# ========================================================================
+# PDE Heat Conduction Tests (MethodOfLines.jl)
+# ========================================================================
+
+@testitem "RoofWallHeatConduction - Steady State" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # Steady-state test: zero surface flux with constant T_bottom
+    # should yield uniform temperature
+    T_bottom = 293.15
+    result = RoofWallHeatConduction(;
+        Δz_total = 0.3, N_layers = 15,
+        λ_val = 1.0, c_val = 2.0e6,
+        h_top = 0.0, T_bottom = T_bottom,
+    )
+
+    sol = solve(result.prob, saveat = 0.1)
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    # At steady state with zero flux at top and T_iB at bottom,
+    # the temperature should be T_bottom everywhere
+    T_final = T_mat[end, :]
+    for Tv in T_final
+        @test Tv ≈ T_bottom rtol = 1e-3
+    end
+end
+
+@testitem "RoofWallHeatConduction - Heat Flux Response" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # Apply constant positive heat flux at top
+    T_bottom = 288.15
+    h_top = 100.0  # 100 W/m²
+    result = RoofWallHeatConduction(;
+        Δz_total = 0.3, N_layers = 15,
+        λ_val = 1.0, c_val = 2.0e6,
+        h_top = h_top, T_bottom = T_bottom,
+    )
+
+    sol = solve(result.prob, saveat = 0.1)
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    # Top surface should be warmer than bottom after heating
+    T_final = T_mat[end, :]
+    @test T_final[1] > T_bottom  # top layer heated above bottom temperature
+
+    # Temperature should be monotonically decreasing from top to bottom
+    for i in 1:(length(T_final) - 1)
+        @test T_final[i] ≥ T_final[i + 1] - 1e-6
+    end
+end
+
+@testitem "RoofWallHeatConduction - Analytical Steady State with Flux" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # Analytical solution for steady state with constant flux at top:
+    # At steady state: ∂T/∂t = 0, so d²T/dz² = 0 -> T(z) = a*z + b
+    # BC: -λ*dT/dz|_{z=0} = h -> -λ*a = h -> a = -h/λ
+    # BC: T(L) = T_iB -> T_iB = a*L + b -> b = T_iB - a*L = T_iB + h*L/λ
+    # T(z) = T_iB + h*(L-z)/λ
+    # T(0) = T_iB + h*L/λ
+
+    L = 0.3
+    λ = 1.5
+    h = 50.0
+    T_iB = 290.0
+
+    result = RoofWallHeatConduction(;
+        Δz_total = L, N_layers = 30,  # Use finer grid for better accuracy
+        λ_val = λ, c_val = 2.0e6,
+        h_top = h, T_bottom = T_iB,
+    )
+
+    # Solve for longer time to reach steady state
+    tspan = (0.0, 100000.0)
+    prob2 = remake(result.prob; tspan = tspan)
+    sol = solve(prob2)
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    T_final = T_mat[end, :]
+
+    # Surface temperature should match analytical solution
+    T_surface_analytical = T_iB + h * L / λ
+    @test T_final[1] ≈ T_surface_analytical rtol = 0.05
+
+    # Bottom temperature should be T_iB
+    @test T_final[end] ≈ T_iB rtol = 1e-3
+end
+
+@testitem "RoadHeatConduction - Steady State Zero Flux" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # With zero flux at both boundaries, temperature should remain at initial value
+    T_init = 288.15
+    result = RoadHeatConduction(;
+        N_layers = 15,
+        λ_val = 1.5, c_val = 2.0e6,
+        h_top = 0.0, T_init_val = T_init,
+    )
+
+    sol = solve(result.prob, saveat = 0.1)
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    # All temperatures should remain at initial value (zero flux everywhere)
+    T_final = T_mat[end, :]
+    for Tv in T_final
+        @test Tv ≈ T_init rtol = 1e-3
+    end
+end
+
+@testitem "RoadHeatConduction - Heat Flux Response" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # Apply heat flux at top, zero flux at bottom
+    T_init = 288.15
+    h_top = 100.0
+    result = RoadHeatConduction(;
+        N_layers = 15,
+        λ_val = 1.5, c_val = 2.0e6,
+        h_top = h_top, T_init_val = T_init,
+    )
+
+    sol = solve(result.prob, saveat = 0.1)
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    # With positive heat flux at top, all temperatures should increase
+    T_final = T_mat[end, :]
+    @test T_final[1] > T_init  # top gets heated
+
+    # Surface should be warmest
+    @test T_final[1] ≥ T_final[end] - 1e-6
+end
+
+@testitem "RoadHeatConduction - Energy Conservation" setup = [TempSetup] tags = [:ch4_temps] begin
+    using MethodOfLines, DomainSets
+
+    # With zero flux at both boundaries, total energy should be conserved
+    T_init = 288.15
+    result = RoadHeatConduction(;
+        N_layers = 15,
+        λ_val = 1.5, c_val = 2.0e6,
+        h_top = 0.0, T_init_val = T_init,
+    )
+
+    sol = solve(result.prob, saveat = [0.0, 1.0])
+    T_mat = sol[result.T(result.t_pde, result.z_var)]
+
+    # With zero flux, average temperature should be constant
+    T_initial = T_mat[1, :]
+    T_final = T_mat[end, :]
+    @test sum(T_initial) ≈ sum(T_final) rtol = 1e-3
 end

@@ -1,84 +1,11 @@
-export compute_grid_roofwall, compute_grid_road,
-    SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperties,
-    InterfaceThermalConductivity, HeatFlux, TridiagonalCoefficients,
+export SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperties,
+    InterfaceThermalConductivity, HeatFlux,
     SurfaceEnergyFlux, BuildingTemperature, WasteHeatAirConditioning,
-    PhaseChangeEnergy, SnowLayerGeometry
+    PhaseChangeEnergy, SnowLayerGeometry,
+    RoofWallHeatConduction, RoadHeatConduction
 
-"""
-    compute_grid_roofwall(Δz_total; N_levgrnd=15)
-
-Computes the node depths, layer thicknesses, and interface depths for the
-uniform grid used for roofs and walls in the CLMU, following Section 4.1
-of Oleson et al. (2010).
-
-Returns a named tuple `(z_node, Δz_layer, z_interface)` where:
-- `z_node[i]`: node depth of layer i (Eq. 4.5), in meters
-- `Δz_layer[i]`: thickness of layer i (Eq. 4.6), in meters
-- `z_interface[j]`: interface depth (Eq. 4.7), in meters, where j maps to paper
-  index i = j-1 (so `z_interface[1]` = top surface = 0)
-
-**Reference**: Oleson et al. (2010), Chapter 4, Section 4.1, Eqs. 4.5–4.7, pp. 91.
-"""
-function compute_grid_roofwall(Δz_total; N_levgrnd = 15)
-    # Eq. 4.5: z_i = (i - 0.5) * (Δz_total / N_levgrnd)
-    z_node = [(i - 0.5) * (Δz_total / N_levgrnd) for i in 1:N_levgrnd]
-
-    # Eq. 4.6: Layer thicknesses
-    Δz_layer = Vector{Float64}(undef, N_levgrnd)
-    Δz_layer[1] = 0.5 * (z_node[1] + z_node[2])
-    for i in 2:(N_levgrnd - 1)
-        Δz_layer[i] = 0.5 * (z_node[i + 1] - z_node[i - 1])
-    end
-    Δz_layer[N_levgrnd] = z_node[N_levgrnd] - z_node[N_levgrnd - 1]
-
-    # Eq. 4.7: Interface depths (j = paper_i + 1)
-    z_interface = Vector{Float64}(undef, N_levgrnd + 1)
-    z_interface[1] = 0.0  # paper i=0: top
-    for i in 1:(N_levgrnd - 1)
-        z_interface[i + 1] = 0.5 * (z_node[i] + z_node[i + 1])
-    end
-    z_interface[N_levgrnd + 1] = z_node[N_levgrnd] + 0.5 * Δz_layer[N_levgrnd]
-
-    return (; z_node, Δz_layer, z_interface)
-end
-
-"""
-    compute_grid_road(; N_levgrnd=15)
-
-Computes the node depths, layer thicknesses, and interface depths for the
-exponentially-spaced grid used for pervious and impervious roads in the CLMU,
-following Section 4.1 of Oleson et al. (2010).
-
-The scaling factor is f_s = 0.025 m (Eq. 4.8). Returns the same named tuple
-format as `compute_grid_roofwall`.
-
-**Reference**: Oleson et al. (2010), Chapter 4, Section 4.1, Eqs. 4.6–4.8, pp. 91–92.
-"""
-function compute_grid_road(; N_levgrnd = 15)
-    f_s = 0.025
-
-    # Eq. 4.8: z_i = f_s * {exp[0.5(i - 0.5)] - 1}
-    z_node = [f_s * (exp(0.5 * (i - 0.5)) - 1) for i in 1:N_levgrnd]
-
-    # Eq. 4.6: Layer thicknesses
-    Δz_layer = Vector{Float64}(undef, N_levgrnd)
-    Δz_layer[1] = 0.5 * (z_node[1] + z_node[2])
-    for i in 2:(N_levgrnd - 1)
-        Δz_layer[i] = 0.5 * (z_node[i + 1] - z_node[i - 1])
-    end
-    Δz_layer[N_levgrnd] = z_node[N_levgrnd] - z_node[N_levgrnd - 1]
-
-    # Eq. 4.7: Interface depths (j = paper_i + 1)
-    z_interface = Vector{Float64}(undef, N_levgrnd + 1)
-    z_interface[1] = 0.0
-    for i in 1:(N_levgrnd - 1)
-        z_interface[i + 1] = 0.5 * (z_node[i] + z_node[i + 1])
-    end
-    z_interface[N_levgrnd + 1] = z_node[N_levgrnd] + 0.5 * Δz_layer[N_levgrnd]
-
-    return (; z_node, Δz_layer, z_interface)
-end
-
+using MethodOfLines
+using DomainSets
 
 """
     SnowLayerGeometry(; name=:SnowLayerGeometry)
@@ -158,7 +85,19 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
         one_Wm⁻¹K⁻¹ = 1.0, [description = "Unit thermal conductivity for non-dimensionalization", unit = u"W/(m*K)"]
         one_kgm⁻³ = 1.0, [description = "Unit density for non-dimensionalization", unit = u"kg/m^3"]
         one_Jm⁻³K⁻¹ = 1.0, [description = "Unit volumetric heat capacity for non-dimensionalization", unit = u"J/(m^3*K)"]
-        one_K = 1.0, [description = "Unit temperature", unit = u"K"]
+    end
+
+    # Reference constants for empirical formula unit tracking (Eq. 4.79)
+    @constants begin
+        λ_s_sand_coeff = 8.80, [description = "Empirical coefficient for sand in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
+        λ_s_clay_coeff = 2.92, [description = "Empirical coefficient for clay in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
+        ρ_mineral = 2700.0, [description = "Mineral soil particle density", unit = u"kg/m^3"]
+        λ_dry_numer_coeff = 0.135, [description = "Empirical numerator coefficient in Eq. 4.80 (W m² kg⁻¹ K⁻¹)", unit = u"W*m^2/(kg*K)"]
+        λ_dry_numer_offset = 64.7, [description = "Empirical numerator offset in Eq. 4.80", unit = u"W/(m*K)"]
+        λ_dry_denom_offset = 2700.0, [description = "Empirical denominator offset in Eq. 4.80 (dimensionless)"]
+        λ_dry_denom_coeff = 0.947, [description = "Empirical denominator coefficient in Eq. 4.80 (dimensionless)"]
+        c_s_sand_coeff = 2.128e6, [description = "Empirical coefficient for sand in Eq. 4.86 (J m⁻³ K⁻¹ per %)", unit = u"J/(m^3*K)"]
+        c_s_clay_coeff = 2.385e6, [description = "Empirical coefficient for clay in Eq. 4.86 (J m⁻³ K⁻¹ per %)", unit = u"J/(m^3*K)"]
     end
 
     @parameters begin
@@ -186,7 +125,7 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
 
     eqs = [
         # Eq. 4.79: λ_{s,i} = (8.80 * %sand + 2.92 * %clay) / (%sand + %clay)
-        λ_s ~ (8.80 * pct_sand + 2.92 * pct_clay) / (pct_sand + pct_clay) * one_Wm⁻¹K⁻¹,
+        λ_s ~ (λ_s_sand_coeff * pct_sand + λ_s_clay_coeff * pct_clay) / (pct_sand + pct_clay),
 
         # Eq. 4.78: Saturated thermal conductivity
         # For T_i ≥ T_f: λ_sat = λ_s^(1-θ_sat) * λ_liq^θ_sat
@@ -196,16 +135,16 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
             (λ_s / one_Wm⁻¹K⁻¹)^(1 - θ_sat) * (λ_liq_const / one_Wm⁻¹K⁻¹)^θ_liq * (λ_ice_const / one_Wm⁻¹K⁻¹)^(θ_sat - θ_liq) * one_Wm⁻¹K⁻¹),
 
         # Bulk density: ρ_d = 2700 * (1 - θ_sat) (Section 4.3)
-        ρ_d ~ 2700.0 * (1 - θ_sat) * one_kgm⁻³,
+        ρ_d ~ ρ_mineral * (1 - θ_sat),
 
         # Eq. 4.80: λ_dry = (0.135 * ρ_d + 64.7) / (2700 - 0.947 * ρ_d)
-        λ_dry ~ (0.135 * ρ_d / one_kgm⁻³ + 64.7) / (2700.0 - 0.947 * ρ_d / one_kgm⁻³) * one_Wm⁻¹K⁻¹,
+        # Denominator is dimensionless (ρ_d divided by reference density)
+        λ_dry ~ (λ_dry_numer_coeff * ρ_d + λ_dry_numer_offset) / (λ_dry_denom_offset - λ_dry_denom_coeff * ρ_d / one_kgm⁻³),
 
         # Eq. 4.82: S_r = (w_liq / (ρ_liq * Δz) + w_ice / (ρ_ice * Δz)) / θ_sat
         S_r ~ (w_liq / (ρ_liq * Δz) + w_ice / (ρ_ice * Δz)) / θ_sat,
 
         # Eq. 4.81: Kersten number (unfrozen: K_e = log(S_r) + 1 ≥ 0; frozen: K_e = S_r)
-        # Using unfrozen formula for T_i ≥ T_f
         K_e ~ ifelse(T_i ≥ T_f,
             max(log(max(S_r, 1e-10)) + 1.0, 0.0),
             S_r),
@@ -216,7 +155,7 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
             λ_dry),
 
         # Eq. 4.86: c_s = (2.128 * %sand + 2.385 * %clay) / (%sand + %clay) × 10^6
-        c_s ~ (2.128 * pct_sand + 2.385 * pct_clay) / (pct_sand + pct_clay) * 1e6 * one_Jm⁻³K⁻¹,
+        c_s ~ (c_s_sand_coeff * pct_sand + c_s_clay_coeff * pct_clay) / (pct_sand + pct_clay),
 
         # Eq. 4.85: c_i = c_s * (1 - θ_sat) + (w_ice / Δz) * C_ice + (w_liq / Δz) * C_liq
         c_soil ~ c_s * (1 - θ_sat) + (w_ice / Δz) * C_ice + (w_liq / Δz) * C_liq,
@@ -249,6 +188,8 @@ depends on the ice and liquid water content (Eq. 4.87).
 
     @constants begin
         one_kgm⁻³ = 1.0, [description = "Unit density for non-dimensionalization", unit = u"kg/m^3"]
+        jordan_linear_coeff = 7.75e-5, [description = "Jordan (1991) linear density coefficient in Eq. 4.83", unit = u"m^3/kg"]
+        jordan_quad_coeff = 1.105e-6, [description = "Jordan (1991) quadratic density coefficient in Eq. 4.83", unit = u"m^6/kg^2"]
     end
 
     @parameters begin
@@ -268,7 +209,7 @@ depends on the ice and liquid water content (Eq. 4.87).
         ρ_sno ~ (w_ice + w_liq) / Δz,
 
         # Eq. 4.83: λ = λ_air + (7.75e-5 * ρ_sno + 1.105e-6 * ρ_sno²) * (λ_ice - λ_air)
-        λ_snow ~ λ_air + (7.75e-5 * ρ_sno / one_kgm⁻³ + 1.105e-6 * (ρ_sno / one_kgm⁻³)^2) * (λ_ice_const - λ_air),
+        λ_snow ~ λ_air + (jordan_linear_coeff * ρ_sno + jordan_quad_coeff * ρ_sno^2) * (λ_ice_const - λ_air),
 
         # Eq. 4.87: c = (w_ice / Δz) * C_ice + (w_liq / Δz) * C_liq
         c_snow ~ (w_ice / Δz) * C_ice + (w_liq / Δz) * C_liq,
@@ -381,163 +322,6 @@ end
 
 
 """
-    TridiagonalCoefficients(; name=:TridiagonalCoefficients, layer_type=:interior)
-
-Computes the tridiagonal matrix coefficients (a_i, b_i, c_i, r_i) for the
-Crank-Nicholson discretization of the heat equation, following Section 4.1
-of Oleson et al. (2010).
-
-The `layer_type` keyword selects the boundary condition:
-- `:interior` — Interior layers (Eqs. 4.46–4.50)
-- `:top` — Top layer with surface heat flux (Eqs. 4.21–4.24)
-- `:bottom_zero_flux` — Bottom layer with zero heat flux (Eqs. 4.32–4.35)
-- `:bottom_building` — Bottom layer with building temperature BC (Eqs. 4.40–4.43)
-
-**Reference**: Oleson et al. (2010), Chapter 4, Section 4.1, pp. 96–101.
-"""
-@component function TridiagonalCoefficients(; name = :TridiagonalCoefficients, layer_type = :interior)
-
-    @constants begin
-        α_CN = 0.5, [description = "Crank-Nicholson weight (Section 4.1) (dimensionless)"]
-    end
-
-    # Common parameters for all layer types
-    @parameters begin
-        c_i, [description = "Volumetric heat capacity of layer", unit = u"J/(m^3*K)"]
-        Δz_i, [description = "Layer thickness", unit = u"m"]
-        Δt, [description = "Time step", unit = u"s"]
-        T_i_n, [description = "Temperature at time n", unit = u"K"]
-    end
-
-    @variables begin
-        a_coeff(t), [description = "Subdiagonal coefficient (dimensionless)"]
-        b_coeff(t), [description = "Diagonal coefficient (dimensionless)"]
-        c_coeff(t), [description = "Superdiagonal coefficient (dimensionless)"]
-        r_coeff(t), [description = "Right-hand side", unit = u"K"]
-    end
-
-    eqs = Equation[]
-
-    if layer_type == :top
-        # Top layer (i = snl + 1): Eqs. 4.21–4.25
-        @parameters begin
-            λ_h_below, [description = "Interface conductivity below", unit = u"W/(m*K)"]
-            z_ip1, [description = "Node depth of layer below", unit = u"m"]
-            z_i, [description = "Node depth of this layer", unit = u"m"]
-            dh_dT, [description = "Derivative of surface heat flux w.r.t. temperature", unit = u"W/(m^2*K)"]
-            h_n, [description = "Surface heat flux at time n", unit = u"W/m^2"]
-            F_i_n, [description = "Heat flux below at time n", unit = u"W/m^2"]
-        end
-
-        push!(eqs,
-            # Eq. 4.21: a_i = 0
-            a_coeff ~ 0.0,
-        )
-        push!(eqs,
-            # Eq. 4.22: b_i = 1 + (Δt/(c_i*Δz_i)) * [(1-α)*λ_h/(z_{i+1}-z_i) - dh/dT]
-            b_coeff ~ 1.0 + (Δt / (c_i * Δz_i)) * ((1 - α_CN) * λ_h_below / (z_ip1 - z_i) - dh_dT),
-        )
-        push!(eqs,
-            # Eq. 4.23: c_i = -(1-α) * (Δt/(c_i*Δz_i)) * λ_h/(z_{i+1}-z_i)
-            c_coeff ~ -(1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_below / (z_ip1 - z_i),
-        )
-        push!(eqs,
-            # Eq. 4.24: r_i = T_i^n + (Δt/(c_i*Δz_i)) * [h^n - (dh/dT)*T_i^n + α*F_i]
-            r_coeff ~ T_i_n + (Δt / (c_i * Δz_i)) * (h_n - dh_dT * T_i_n + α_CN * F_i_n),
-        )
-
-    elseif layer_type == :bottom_zero_flux
-        # Bottom layer with zero flux (pervious/impervious road): Eqs. 4.32–4.35
-        @parameters begin
-            λ_h_above, [description = "Interface conductivity above", unit = u"W/(m*K)"]
-            z_i, [description = "Node depth of this layer", unit = u"m"]
-            z_im1, [description = "Node depth of layer above", unit = u"m"]
-            F_im1_n, [description = "Heat flux above at time n", unit = u"W/m^2"]
-        end
-
-        push!(eqs,
-            # Eq. 4.32: a_i = -(1-α) * (Δt/(c_i*Δz_i)) * λ_h/(z_i - z_{i-1})
-            a_coeff ~ -(1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_above / (z_i - z_im1),
-        )
-        push!(eqs,
-            # Eq. 4.33: b_i = 1 + (1-α) * (Δt/(c_i*Δz_i)) * λ_h/(z_i - z_{i-1})
-            b_coeff ~ 1.0 + (1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_above / (z_i - z_im1),
-        )
-        push!(eqs,
-            # Eq. 4.34: c_i = 0
-            c_coeff ~ 0.0,
-        )
-        push!(eqs,
-            # Eq. 4.35: r_i = T_i^n - α * (Δt/(c_i*Δz_i)) * F_{i-1}
-            r_coeff ~ T_i_n - α_CN * (Δt / (c_i * Δz_i)) * F_im1_n,
-        )
-
-    elseif layer_type == :bottom_building
-        # Bottom layer with building temperature BC (roof/wall): Eqs. 4.40–4.43
-        @parameters begin
-            λ_h_above, [description = "Interface conductivity above", unit = u"W/(m*K)"]
-            λ_h_below, [description = "Interface conductivity below (to building)", unit = u"W/(m*K)"]
-            z_i, [description = "Node depth of this layer", unit = u"m"]
-            z_im1, [description = "Node depth of layer above", unit = u"m"]
-            z_h_below, [description = "Interface depth below this layer", unit = u"m"]
-            F_i_n, [description = "Heat flux below at time n", unit = u"W/m^2"]
-            F_im1_n, [description = "Heat flux above at time n", unit = u"W/m^2"]
-        end
-
-        push!(eqs,
-            # Eq. 4.40: a_i = -(1-α) * (Δt/(c_i*Δz_i)) * λ_h_above/(z_i - z_{i-1})
-            a_coeff ~ -(1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_above / (z_i - z_im1),
-        )
-        push!(eqs,
-            # Eq. 4.41: b_i = 1 + (1-α) * (Δt/(c_i*Δz_i)) * [λ_h_above/(z_i - z_{i-1}) + λ_h_below/(z_h_below - z_i)]
-            b_coeff ~ 1.0 + (1 - α_CN) * (Δt / (c_i * Δz_i)) * (λ_h_above / (z_i - z_im1) + λ_h_below / (z_h_below - z_i)),
-        )
-        push!(eqs,
-            # Eq. 4.42: c_i = 0 (T_{i+1} = T_iB goes to RHS)
-            c_coeff ~ 0.0,
-        )
-        push!(eqs,
-            # Eq. 4.43: r_i = T_i^n + α * (Δt/(c_i*Δz_i)) * (F_i - α * F_{i-1})
-            # Note: The paper writes r_i = T_i^n + α*(Δt/(c_i*Δz_i))*(F_i - α*F_{i-1})
-            # but this should be F_i - F_{i-1} with α weighting already applied in F_i, F_{i-1}
-            r_coeff ~ T_i_n + α_CN * (Δt / (c_i * Δz_i)) * (F_i_n - F_im1_n),
-        )
-
-    else  # :interior
-        # Interior layers (snl+1 < i < N_levgrnd): Eqs. 4.47–4.50
-        @parameters begin
-            λ_h_above, [description = "Interface conductivity above", unit = u"W/(m*K)"]
-            λ_h_below, [description = "Interface conductivity below", unit = u"W/(m*K)"]
-            z_i, [description = "Node depth of this layer", unit = u"m"]
-            z_im1, [description = "Node depth of layer above", unit = u"m"]
-            z_ip1, [description = "Node depth of layer below", unit = u"m"]
-            F_i_n, [description = "Heat flux below at time n", unit = u"W/m^2"]
-            F_im1_n, [description = "Heat flux above at time n", unit = u"W/m^2"]
-        end
-
-        push!(eqs,
-            # Eq. 4.47: a_i = -(1-α) * (Δt/(c_i*Δz_i)) * λ_h_above/(z_i - z_{i-1})
-            a_coeff ~ -(1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_above / (z_i - z_im1),
-        )
-        push!(eqs,
-            # Eq. 4.48: b_i = 1 + (1-α) * (Δt/(c_i*Δz_i)) * [λ_h_above/(z_i - z_{i-1}) + λ_h_below/(z_{i+1} - z_i)]
-            b_coeff ~ 1.0 + (1 - α_CN) * (Δt / (c_i * Δz_i)) * (λ_h_above / (z_i - z_im1) + λ_h_below / (z_ip1 - z_i)),
-        )
-        push!(eqs,
-            # Eq. 4.49: c_i = -(1-α) * (Δt/(c_i*Δz_i)) * λ_h_below/(z_{i+1} - z_i)
-            c_coeff ~ -(1 - α_CN) * (Δt / (c_i * Δz_i)) * λ_h_below / (z_ip1 - z_i),
-        )
-        push!(eqs,
-            # Eq. 4.50: r_i = T_i^n + α * (Δt/(c_i*Δz_i)) * (F_i - F_{i-1})
-            r_coeff ~ T_i_n + α_CN * (Δt / (c_i * Δz_i)) * (F_i_n - F_im1_n),
-        )
-    end
-
-    return System(eqs, t; name)
-end
-
-
-"""
     SurfaceEnergyFlux(; name=:SurfaceEnergyFlux)
 
 Computes the net heat flux into each urban surface and its derivative with respect
@@ -621,7 +405,6 @@ and maximum values (T_{iB,min} and T_{iB,max}).
 
     eqs = [
         # Eq. 4.38: L = (H / (H/W)) * (W_roof / (1 - W_roof))
-        # Simplifies to: L = W * W_roof / (1 - W_roof) = (H / H_W) * W_roof / (1 - W_roof)
         L_roof ~ (H_canyon / H_W) * (W_roof / (1 - W_roof)),
 
         # Eq. 4.37: T_iB = [H * (T_shdwall + T_sunwall) + L_roof * T_roof] / (2H + L_roof)
@@ -747,4 +530,145 @@ thermal storage are included.
     end
 
     return System(eqs, t; name)
+end
+
+
+"""
+    RoofWallHeatConduction(; name=:RoofWallHeatConduction)
+
+Implements the 1D heat conduction equation (Eq. 4.4) for roof and wall surfaces
+using MethodOfLines.jl for automatic spatial discretization.
+
+The governing PDE is:
+    c ∂T/∂t = ∂/∂z [λ ∂T/∂z]
+
+For roofs and walls, the domain is a uniform grid of total thickness Δz_total
+(Eq. 4.5). The boundary conditions are:
+- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
+- Bottom (z=Δz_total): Dirichlet BC with building temperature T_iB (Eq. 4.37)
+
+The thermal conductivity λ and volumetric heat capacity c are prescribed
+parameters for each layer (from Table 1.3).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, pp. 90–91.
+"""
+function RoofWallHeatConduction(; name = :RoofWallHeatConduction,
+    Δz_total = 0.3,
+    N_layers = 15,
+    λ_val = 1.0,
+    c_val = 2.0e6,
+    h_top = 0.0,
+    T_bottom = 293.15)
+
+    @parameters t_pde [unit = u"s"]
+    @parameters z_var [unit = u"m"]
+
+    @variables T(..) [unit = u"K"]
+
+    Dt = Differential(t_pde)
+    Dz = Differential(z_var)
+    Dzz = Differential(z_var)^2
+
+    @parameters begin
+        λ_rw, [description = "Thermal conductivity of roof/wall material", unit = u"W/(m*K)"]
+        c_rw, [description = "Volumetric heat capacity of roof/wall material", unit = u"J/(m^3*K)"]
+        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_iB, [description = "Internal building temperature at bottom boundary (Eq. 4.37)", unit = u"K"]
+        T_init, [description = "Initial temperature", unit = u"K"]
+    end
+
+    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
+    # For uniform material: c * ∂T/∂t = λ * ∂²T/∂z²
+    eq = [c_rw * Dt(T(t_pde, z_var)) ~ λ_rw * Dzz(T(t_pde, z_var))]  # Eq. 4.4
+
+    bcs = [
+        T(0, z_var) ~ T_init,                                   # Initial condition
+        -λ_rw * Dz(T(t_pde, 0.0)) ~ h_surface,                 # Neumann BC at top (Eq. 4.26)
+        T(t_pde, Δz_total) ~ T_iB,                              # Dirichlet BC at bottom (Eq. 4.37)
+    ]
+
+    domains = [
+        t_pde ∈ Interval(0.0, 1.0),
+        z_var ∈ Interval(0.0, Δz_total),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom])
+
+    dz = Δz_total / N_layers
+    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    return (; prob, T, t_pde, z_var)
+end
+
+
+"""
+    RoadHeatConduction(; name=:RoadHeatConduction)
+
+Implements the 1D heat conduction equation (Eq. 4.4) for pervious and impervious
+road surfaces using MethodOfLines.jl for automatic spatial discretization.
+
+For roads, the domain uses exponential spacing (Eq. 4.8) with the total depth
+determined by the scaling factor f_s = 0.025 m. The boundary conditions are:
+- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
+- Bottom (z=z_max): Zero heat flux (Neumann BC, ∂T/∂z = 0)
+
+The thermal conductivity and heat capacity can vary with depth (e.g., impervious
+layers vs soil layers).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, 4.8, pp. 90–92.
+"""
+function RoadHeatConduction(; name = :RoadHeatConduction,
+    N_layers = 15,
+    λ_val = 1.5,
+    c_val = 2.0e6,
+    h_top = 0.0,
+    T_init_val = 288.15)
+
+    f_s = 0.025
+    z_max = f_s * (exp(0.5 * (N_layers - 0.5)) - 1)
+
+    @parameters t_pde [unit = u"s"]
+    @parameters z_var [unit = u"m"]
+
+    @variables T(..) [unit = u"K"]
+
+    Dt = Differential(t_pde)
+    Dz = Differential(z_var)
+    Dzz = Differential(z_var)^2
+
+    @parameters begin
+        λ_rd, [description = "Thermal conductivity of road material", unit = u"W/(m*K)"]
+        c_rd, [description = "Volumetric heat capacity of road material", unit = u"J/(m^3*K)"]
+        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_init, [description = "Initial temperature", unit = u"K"]
+    end
+
+    @parameters begin
+        zero_flux, [description = "Zero heat flux for bottom BC", unit = u"K/m"]
+    end
+
+    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
+    eq = [c_rd * Dt(T(t_pde, z_var)) ~ λ_rd * Dzz(T(t_pde, z_var))]  # Eq. 4.4
+
+    bcs = [
+        T(0, z_var) ~ T_init,                                 # Initial condition
+        -λ_rd * Dz(T(t_pde, 0.0)) ~ h_surface,               # Neumann BC at top
+        Dz(T(t_pde, z_max)) ~ zero_flux,                      # Zero flux at bottom
+    ]
+
+    domains = [
+        t_pde ∈ Interval(0.0, 1.0),
+        z_var ∈ Interval(0.0, z_max),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0])
+
+    dz = z_max / N_layers
+    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    return (; prob, T, t_pde, z_var)
 end

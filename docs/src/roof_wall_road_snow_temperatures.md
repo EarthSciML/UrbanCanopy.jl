@@ -4,12 +4,17 @@
 
 Chapter 4 of the CLMU technical note describes the computation of temperatures for
 roof, sunlit wall, shaded wall, pervious road, and impervious road columns with
-optional snow overlays. Heat conduction through each surface column is solved using
-a Crank-Nicholson finite-difference scheme with layer-specific boundary conditions.
+optional snow overlays. Heat conduction through each surface column is governed by
+the 1D heat equation (Eq. 4.4):
+
+``c \frac{\partial T}{\partial t} = \frac{\partial}{\partial z}\!\left[\lambda \frac{\partial T}{\partial z}\right]``
+
+which is discretized automatically using [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl).
 
 The implementation provides modular components for:
-1. **Grid discretization**: Uniform grids for roofs/walls (Eqs. 4.5–4.7) and
-   exponential grids for roads (Eqs. 4.6–4.8)
+1. **PDE heat conduction**: Automatic spatial discretization of the heat equation
+   for roofs/walls (uniform grid, Eq. 4.5) and roads (exponential grid, Eq. 4.8)
+   using MethodOfLines.jl
 2. **Snow layer geometry**: Node depths, thicknesses, and interfaces for up to 5
    snow layers (Eqs. 4.9–4.10)
 3. **Thermal properties**: Soil conductivity via Farouki (1981) / Kersten number
@@ -17,30 +22,14 @@ The implementation provides modular components for:
    volumetric heat capacities from de Vries (1963) (Eqs. 4.85–4.87)
 4. **Interface conductivity**: Harmonic mean across adjacent layers (Eq. 4.12)
 5. **Heat flux**: Fourier's law discretized across interfaces (Eq. 4.11)
-6. **Tridiagonal coefficients**: Crank-Nicholson discretization for top, interior,
-   bottom zero-flux, and bottom building-coupled layers (Eqs. 4.21–4.50)
-7. **Surface energy flux**: Net surface heat flux and its temperature derivative
+6. **Surface energy flux**: Net surface heat flux and its temperature derivative
    for the implicit scheme (Eqs. 4.26–4.29)
-8. **Building temperature**: Weighted wall/roof average for interior building
+7. **Building temperature**: Weighted wall/roof average for interior building
    temperature (Eqs. 4.37–4.38)
-9. **Waste heat and air conditioning**: HVAC waste heat distribution and air
+8. **Waste heat and air conditioning**: HVAC waste heat distribution and air
    conditioning heat removal (Eqs. 4.55–4.56)
-10. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
-    (Eq. 4.59)
-
-### Design Note: Manual Discretization vs. PDE Framework
-
-The underlying physics is a 1D heat conduction PDE (Eq. 4.4):
-``c \frac{\partial T}{\partial t} = \frac{\partial}{\partial z}\!\left[\lambda \frac{\partial T}{\partial z}\right]``
-which could in principle be implemented as a `PDESystem` and discretized automatically
-via MethodOfLines.jl. However, the domain is very small — each surface column has only
-**15 soil/building layers** (uniform 0.02 m spacing for a 0.3 m roof, or exponential
-spacing to a few meters for roads) plus up to **5 snow layers**. At most 20 elements
-per column, with 5 independent columns (roof, sunlit wall, shaded wall, pervious road,
-impervious road). This is essentially a thermal resistance network through a building
-envelope or shallow soil profile, not a large-domain PDE problem. The manual
-Crank-Nicholson discretization with tridiagonal coefficients — matching the original
-CLM Fortran implementation — is the natural and efficient approach for this scale.
+9. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
+   (Eq. 4.59)
 
 **Reference**: Oleson, K.W., G.B. Bonan, J.J. Feddema, M. Vertenstein, and E. Kluzek,
 2010: Technical Description of an Urban Parameterization for the Community Land Model
@@ -48,58 +37,36 @@ CLM Fortran implementation — is the natural and efficient approach for this sc
 Boulder, CO, 168 pp. Chapter 4: Roof, Wall, Road, Snow Temperatures (pp. 91–109).
 
 ```@docs
-compute_grid_roofwall
-compute_grid_road
 SnowLayerGeometry
 SoilThermalProperties
 SnowThermalProperties
 UrbanSurfaceThermalProperties
 InterfaceThermalConductivity
 HeatFlux
-TridiagonalCoefficients
 SurfaceEnergyFlux
 BuildingTemperature
 WasteHeatAirConditioning
 PhaseChangeEnergy
+RoofWallHeatConduction
+RoadHeatConduction
 ```
 
 ## Implementation
 
-### Grid Discretization
+### PDE Heat Conduction
 
 Roofs and walls use a uniform grid with equal spacing (Eq. 4.5), while roads use
 an exponentially increasing grid with scale factor ``f_s = 0.025`` m (Eq. 4.8).
-These are implemented as pure Julia functions rather than ModelingToolkit components
-since they compute fixed geometry.
+The heat equation is discretized using MethodOfLines.jl, which automatically
+generates a system of ODEs from the PDE with appropriate boundary conditions.
 
-```@example ch4_temps
-using UrbanCanopy
-using Plots
+For roofs and walls:
+- **Top boundary** (z=0): Neumann BC with surface heat flux ``h`` (Eq. 4.26)
+- **Bottom boundary** (z=Δz\_total): Dirichlet BC with building temperature ``T_{iB}`` (Eq. 4.37)
 
-# Roof/wall grid (0.3 m total thickness)
-grid_rw = compute_grid_roofwall(0.3)
-
-# Road grid (exponential spacing)
-grid_rd = compute_grid_road()
-
-p = plot(layout=(1,2), size=(800, 400))
-
-# Left: node depths
-scatter!(p[1], ones(15), grid_rw.z_node, label="Roof/Wall (uniform)",
-    xlabel="", ylabel="Depth (m)", yflip=true, markersize=5)
-scatter!(p[1], 2*ones(15), grid_rd.z_node, label="Road (exponential)",
-    markersize=5)
-title!(p[1], "Node Depths (Eqs. 4.5, 4.8)")
-xticks!(p[1], [1, 2], ["Roof/Wall", "Road"])
-
-# Right: layer thicknesses
-bar!(p[2], 1:15, grid_rw.Δz_layer, label="Roof/Wall", alpha=0.7,
-    xlabel="Layer Index", ylabel="Thickness (m)")
-bar!(p[2], 1:15, grid_rd.Δz_layer, label="Road", alpha=0.7)
-title!(p[2], "Layer Thicknesses (Eq. 4.6)")
-
-p
-```
+For roads:
+- **Top boundary** (z=0): Neumann BC with surface heat flux ``h`` (Eq. 4.26)
+- **Bottom boundary** (z=z\_max): Zero heat flux Neumann BC
 
 ### Thermal Properties Components
 
@@ -148,30 +115,6 @@ DataFrame(
 eqs = equations(sys_snow)
 ```
 
-#### Tridiagonal Coefficients
-
-The Crank-Nicholson scheme produces a tridiagonal system ``a_i T_{i-1}^{n+1} + b_i T_i^{n+1} + c_i T_{i+1}^{n+1} = r_i``
-with different coefficient formulas depending on the layer position. The `:top`
-layer includes the surface energy flux linearization (Eqs. 4.21–4.24), `:interior`
-layers use standard three-point stencils (Eqs. 4.47–4.50), `:bottom_zero_flux`
-applies a zero-flux lower boundary (Eqs. 4.32–4.35), and `:bottom_building`
-couples to the internal building temperature (Eqs. 4.40–4.43).
-
-```@example ch4_temps
-sys_tri = TridiagonalCoefficients(; layer_type=:interior)
-
-vars = unknowns(sys_tri)
-DataFrame(
-    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
-    :Description => [ModelingToolkit.getdescription(v) for v in vars]
-)
-```
-
-```@example ch4_temps
-eqs = equations(sys_tri)
-```
-
 ## Analysis
 
 ### Soil Thermal Conductivity vs Saturation (Eqs. 4.77–4.82)
@@ -183,6 +126,7 @@ where ``S_r`` is the degree of saturation; for frozen soil, ``K_e = S_r``.
 
 ```@example ch4_temps
 using OrdinaryDiffEqDefault
+using UrbanCanopy
 
 sys = SoilThermalProperties()
 compiled = mtkcompile(sys)
@@ -232,6 +176,8 @@ for Sr in S_r_range
     push!(λ_frozen, sol[compiled.λ_soil][end])
     push!(K_e_frozen, sol[compiled.K_e][end])
 end
+
+using Plots
 
 p1 = plot(S_r_range, K_e_unfrozen, label="Unfrozen (log S_r + 1)", linewidth=2,
     xlabel="Degree of Saturation S_r", ylabel="Kersten Number K_e",
@@ -412,3 +358,79 @@ As the roof fraction increases, the building temperature shifts from the
 wall-dominated average towards the roof temperature. At small roof fractions,
 the two wall surfaces dominate and ``T_{iB}`` lies between ``T_{sunwall}`` and
 ``T_{shdwall}``.
+
+### Roof/Wall Heat Conduction (Eq. 4.4)
+
+The 1D heat equation for roof and wall surfaces is discretized using
+MethodOfLines.jl. The following example demonstrates the steady-state
+temperature profile with a constant surface heat flux of 50 W/m² at the
+top and a fixed building temperature of 290 K at the bottom.
+
+At steady state (``\partial T / \partial t = 0``), the heat equation reduces to
+``d^2T/dz^2 = 0``, giving a linear temperature profile ``T(z) = T_{iB} + h(L-z)/\lambda``.
+
+```@example ch4_temps
+using MethodOfLines, DomainSets
+
+L = 0.3
+λ_val = 1.5
+h_val = 50.0
+T_iB = 290.0
+
+result = RoofWallHeatConduction(;
+    Δz_total = L, N_layers = 30,
+    λ_val = λ_val, c_val = 2.0e6,
+    h_top = h_val, T_bottom = T_iB,
+)
+
+# Solve for long time to reach steady state
+prob2 = remake(result.prob; tspan = (0.0, 100000.0))
+sol = solve(prob2)
+
+T_mat = sol[result.T(result.t_pde, result.z_var)]
+z_disc = sol[result.z_var]
+T_final = T_mat[end, :]
+
+# Analytical solution
+z_analytical = range(0, L, length=100)
+T_analytical = T_iB .+ h_val .* (L .- z_analytical) ./ λ_val
+
+p = plot(z_analytical, T_analytical, label="Analytical", linewidth=2, linestyle=:dash,
+    xlabel="Depth z (m)", ylabel="Temperature (K)",
+    title="Roof/Wall Steady-State Temperature Profile", legend=:topright)
+scatter!(p, z_disc, T_final, label="MethodOfLines", markersize=4)
+p
+```
+
+### Road Heat Conduction with Zero-Flux Bottom (Eq. 4.4)
+
+Road surfaces use the same heat equation but with a zero heat flux (insulated)
+boundary condition at the bottom. With zero flux at both boundaries, the
+temperature remains uniform at its initial value, demonstrating energy
+conservation.
+
+```@example ch4_temps
+T_init = 288.15
+result_road = RoadHeatConduction(;
+    N_layers = 15,
+    λ_val = 1.5, c_val = 2.0e6,
+    h_top = 0.0, T_init_val = T_init,
+)
+
+sol_road = solve(result_road.prob, saveat = 0.1)
+T_mat_road = sol_road[result_road.T(result_road.t_pde, result_road.z_var)]
+
+t_disc = sol_road[result_road.t_pde]
+avg_T = [mean(T_mat_road[i, :]) for i in 1:length(t_disc)]
+
+using Statistics
+p = plot(t_disc, avg_T, linewidth=2, label="Mean temperature",
+    xlabel="Time (s)", ylabel="Temperature (K)",
+    title="Road Energy Conservation (zero flux BCs)", legend=:topright)
+hline!(p, [T_init], label="Initial T", linestyle=:dash, color=:red)
+p
+```
+
+With insulated (zero-flux) boundary conditions on both sides, the average
+temperature remains constant, confirming energy conservation in the
+discretized system.
