@@ -16,6 +16,7 @@ makedocs(;
         "CLMU Introduction" => "clmu_introduction.md",
         "Albedos and Radiative Fluxes" => "albedos_radiative_fluxes.md",
         "Heat and Momentum Fluxes" => "heat_momentum_fluxes.md",
+        "Roof, Wall, Road, Snow Temperatures" => "roof_wall_road_snow_temperatures.md",
         "API" => "api.md",
     ],
 )
