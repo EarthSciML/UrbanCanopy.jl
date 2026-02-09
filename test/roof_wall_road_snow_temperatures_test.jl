@@ -30,13 +30,13 @@ end
     sol = solve(prob)
 
     # Layer 0 thickness = z_sno
-    @test sol[compiled.Δz_snow_0][end] ≈ z_sno_val rtol = 1e-10
+    @test sol[compiled.Δz_snow_0][end] ≈ z_sno_val rtol = 1.0e-10
 
     # Node at midpoint of layer: z = 0 - 0.5 * Δz (negative = above surface)
-    @test sol[compiled.z_node_snow_0][end] ≈ -0.5 * z_sno_val rtol = 1e-10
+    @test sol[compiled.z_node_snow_0][end] ≈ -0.5 * z_sno_val rtol = 1.0e-10
 
     # Top interface: z_{h,-1} = 0 - Δz_0
-    @test sol[compiled.z_interface_snow_neg1][end] ≈ -z_sno_val rtol = 1e-10
+    @test sol[compiled.z_interface_snow_neg1][end] ≈ -z_sno_val rtol = 1.0e-10
 end
 
 # ========================================================================
@@ -73,25 +73,25 @@ end
     sol = solve(prob)
 
     # Eq. 4.79: λ_s = (8.80 * 60 + 2.92 * 20) / (60 + 20) = 7.33
-    @test sol[compiled.λ_s][end] ≈ 7.33 rtol = 1e-6
+    @test sol[compiled.λ_s][end] ≈ 7.33 rtol = 1.0e-6
 
     # Eq. 4.86: c_s
-    expected_cs = (2.128 * 60 + 2.385 * 20) / (60 + 20) * 1e6
-    @test sol[compiled.c_s][end] ≈ expected_cs rtol = 1e-6
+    expected_cs = (2.128 * 60 + 2.385 * 20) / (60 + 20) * 1.0e6
+    @test sol[compiled.c_s][end] ≈ expected_cs rtol = 1.0e-6
 
     # Bulk density: ρ_d = 2700 * (1 - 0.4) = 1620
-    @test sol[compiled.ρ_d][end] ≈ 1620.0 rtol = 1e-6
+    @test sol[compiled.ρ_d][end] ≈ 1620.0 rtol = 1.0e-6
 
     # Eq. 4.80: λ_dry
     expected_λ_dry = (0.135 * 1620 + 64.7) / (2700 - 0.947 * 1620)
-    @test sol[compiled.λ_dry][end] ≈ expected_λ_dry rtol = 1e-6
+    @test sol[compiled.λ_dry][end] ≈ expected_λ_dry rtol = 1.0e-6
 
     # Eq. 4.82: S_r = (50/(1000*0.5) + 0/(917*0.5)) / 0.4 = 0.25
-    @test sol[compiled.S_r][end] ≈ 0.25 rtol = 1e-6
+    @test sol[compiled.S_r][end] ≈ 0.25 rtol = 1.0e-6
 
     # Thermal conductivity: physical bounds
     @test sol[compiled.λ_soil][end] > 0
-    @test sol[compiled.λ_soil][end] ≥ sol[compiled.λ_dry][end] - 1e-10
+    @test sol[compiled.λ_soil][end] ≥ sol[compiled.λ_dry][end] - 1.0e-10
 
     # Heat capacity: positive
     @test sol[compiled.c_soil][end] > 0
@@ -116,12 +116,12 @@ end
     sol = solve(prob)
 
     # For S_r = 0, λ = λ_dry (Eq. 4.77)
-    @test sol[compiled.S_r][end] ≈ 0.0 atol = 1e-15
-    @test sol[compiled.λ_soil][end] ≈ sol[compiled.λ_dry][end] rtol = 1e-6
+    @test sol[compiled.S_r][end] ≈ 0.0 atol = 1.0e-15
+    @test sol[compiled.λ_soil][end] ≈ sol[compiled.λ_dry][end] rtol = 1.0e-6
 
     # Dry soil heat capacity: c = c_s * (1 - θ_sat) only
     expected_c = sol[compiled.c_s][end] * (1 - 0.4)
-    @test sol[compiled.c_soil][end] ≈ expected_c rtol = 1e-6
+    @test sol[compiled.c_soil][end] ≈ expected_c rtol = 1.0e-6
 end
 
 @testitem "SoilThermalProperties - Frozen Kersten" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -144,7 +144,7 @@ end
 
     # Eq. 4.81: For T < T_f, K_e = S_r
     S_r = (100.0 / (917.0 * 0.5)) / 0.4
-    @test sol[compiled.K_e][end] ≈ S_r rtol = 1e-6
+    @test sol[compiled.K_e][end] ≈ S_r rtol = 1.0e-6
 end
 
 # ========================================================================
@@ -179,19 +179,19 @@ end
     sol = solve(prob)
 
     # Eq. 4.84: ρ_sno = (w_ice + w_liq) / Δz = 100
-    @test sol[compiled.ρ_sno][end] ≈ 100.0 rtol = 1e-10
+    @test sol[compiled.ρ_sno][end] ≈ 100.0 rtol = 1.0e-10
 
     # Eq. 4.83: λ = λ_air + (7.75e-5 * ρ + 1.105e-6 * ρ²) * (λ_ice - λ_air)
     λ_air = 0.023
     λ_ice = 2.29
     ρ = 100.0
     expected_λ = λ_air + (7.75e-5 * ρ + 1.105e-6 * ρ^2) * (λ_ice - λ_air)
-    @test sol[compiled.λ_snow][end] ≈ expected_λ rtol = 1e-6
+    @test sol[compiled.λ_snow][end] ≈ expected_λ rtol = 1.0e-6
 
     # Eq. 4.87: c = (w_ice/Δz) * C_ice
     C_ice = 2117.27
     expected_c = (w_ice_val / Δz_val) * C_ice
-    @test sol[compiled.c_snow][end] ≈ expected_c rtol = 1e-6
+    @test sol[compiled.c_snow][end] ≈ expected_c rtol = 1.0e-6
 
     # Snow conductivity between air and ice values
     @test sol[compiled.λ_snow][end] > λ_air
@@ -229,7 +229,7 @@ end
     )
     prob = ODEProblem(compiled, params, (0.0, 1.0))
     sol = solve(prob)
-    @test sol[compiled.λ_interface][end] ≈ 1.0 rtol = 1e-10
+    @test sol[compiled.λ_interface][end] ≈ 1.0 rtol = 1.0e-10
 
     # Different conductivities: harmonic mean at midpoint
     params2 = Dict(
@@ -240,7 +240,7 @@ end
     sol2 = solve(prob2)
 
     # Eq. 4.12: λ = 1*3*1 / (1*0.5 + 3*0.5) = 3/2 = 1.5
-    @test sol2[compiled.λ_interface][end] ≈ 1.5 rtol = 1e-10
+    @test sol2[compiled.λ_interface][end] ≈ 1.5 rtol = 1.0e-10
 end
 
 # ========================================================================
@@ -261,7 +261,7 @@ end
     sol = solve(prob)
 
     # F = -1.0 * (300 - 290) / (0.15 - 0.05) = -100 W/m²
-    @test sol[compiled.F][end] ≈ -100.0 rtol = 1e-10
+    @test sol[compiled.F][end] ≈ -100.0 rtol = 1.0e-10
     @test sol[compiled.F][end] < 0  # downward: heat flows from hot to cold
 
     # Equal temperatures: zero flux
@@ -272,7 +272,7 @@ end
     )
     prob_eq = ODEProblem(compiled, params_eq, (0.0, 1.0))
     sol_eq = solve(prob_eq)
-    @test sol_eq[compiled.F][end] ≈ 0.0 atol = 1e-12
+    @test sol_eq[compiled.F][end] ≈ 0.0 atol = 1.0e-12
 end
 
 # ========================================================================
@@ -296,16 +296,16 @@ end
 
     # Eq. 4.26
     expected_h = 200.0 - 50.0 - 30.0 - 20.0 + 10.0 + 5.0
-    @test sol[compiled.h][end] ≈ expected_h rtol = 1e-10
+    @test sol[compiled.h][end] ≈ expected_h rtol = 1.0e-10
 
     # Eq. 4.29
     σ = 5.67e-8
     expected_dLdT = 4 * 0.95 * σ * 300.0^3
-    @test sol[compiled.dL_g_dT][end] ≈ expected_dLdT rtol = 1e-6
+    @test sol[compiled.dL_g_dT][end] ≈ expected_dLdT rtol = 1.0e-6
 
     # Eq. 4.28
     expected_dhdT = -expected_dLdT - 5.0 - 2.0
-    @test sol[compiled.dh_dT][end] ≈ expected_dhdT rtol = 1e-6
+    @test sol[compiled.dh_dT][end] ≈ expected_dhdT rtol = 1.0e-6
 end
 
 # ========================================================================
@@ -334,15 +334,15 @@ end
 
     # Eq. 4.38: L = (H / H_W) * (W_roof / (1 - W_roof))
     expected_L = (H / H_W) * (W_roof / (1 - W_roof))
-    @test sol[compiled.L_roof][end] ≈ expected_L rtol = 1e-10
+    @test sol[compiled.L_roof][end] ≈ expected_L rtol = 1.0e-10
 
     # Eq. 4.37
     expected_T = (H * (T_shd + T_sun) + expected_L * T_roof_val) / (2 * H + expected_L)
-    @test sol[compiled.T_iB_unclamped][end] ≈ expected_T rtol = 1e-10
+    @test sol[compiled.T_iB_unclamped][end] ≈ expected_T rtol = 1.0e-10
 
     # T_iB should be between min and max of input temperatures
-    @test sol[compiled.T_iB_unclamped][end] ≥ min(T_shd, T_sun, T_roof_val) - 1e-10
-    @test sol[compiled.T_iB_unclamped][end] ≤ max(T_shd, T_sun, T_roof_val) + 1e-10
+    @test sol[compiled.T_iB_unclamped][end] ≥ min(T_shd, T_sun, T_roof_val) - 1.0e-10
+    @test sol[compiled.T_iB_unclamped][end] ≤ max(T_shd, T_sun, T_roof_val) + 1.0e-10
 end
 
 @testitem "BuildingTemperature - Equal Temperatures" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -359,7 +359,7 @@ end
 
     prob = ODEProblem(compiled, params, (0.0, 1.0))
     sol = solve(prob)
-    @test sol[compiled.T_iB_unclamped][end] ≈ T_uniform rtol = 1e-10
+    @test sol[compiled.T_iB_unclamped][end] ≈ T_uniform rtol = 1.0e-10
 end
 
 # ========================================================================
@@ -385,9 +385,9 @@ end
 
     expected_unclamped = 0.3 * (f_heat * 10.0 + f_cool * 5.0) +
                          0.7 * 1.0 * (f_heat * 8.0 + f_cool * 3.0 + f_heat * 7.0 + f_cool * 2.0)
-    @test sol[compiled.H_wasteheat_unclamped][end] ≈ expected_unclamped rtol = 1e-6
-    @test sol[compiled.H_wasteheat][end] ≈ min(expected_unclamped, 100.0) rtol = 1e-6
-    @test sol[compiled.H_aircond][end] ≈ 5.0 + 3.0 + 2.0 rtol = 1e-10
+    @test sol[compiled.H_wasteheat_unclamped][end] ≈ expected_unclamped rtol = 1.0e-6
+    @test sol[compiled.H_wasteheat][end] ≈ min(expected_unclamped, 100.0) rtol = 1.0e-6
+    @test sol[compiled.H_aircond][end] ≈ 5.0 + 3.0 + 2.0 rtol = 1.0e-10
 end
 
 @testitem "WasteHeatAirConditioning - Max Clamping" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -403,7 +403,7 @@ end
 
     prob = ODEProblem(compiled, params, (0.0, 1.0))
     sol = solve(prob)
-    @test sol[compiled.H_wasteheat][end] ≈ 100.0 rtol = 1e-6
+    @test sol[compiled.H_wasteheat][end] ≈ 100.0 rtol = 1.0e-6
 end
 
 # ========================================================================
@@ -416,7 +416,7 @@ end
 
     T_f = 273.15
     α = 0.5
-    c_i = 2e6
+    c_i = 2.0e6
     Δz = 0.1
     Δt = 3600.0
     T_n = 274.0
@@ -437,7 +437,7 @@ end
 
     expected = α * (F_i_n - F_im1_n) + (1 - α) * (F_i_np1 - F_im1_np1) -
                (c_i * Δz / Δt) * (T_f - T_n)
-    @test sol[compiled.H_excess][end] ≈ expected rtol = 1e-10
+    @test sol[compiled.H_excess][end] ≈ expected rtol = 1.0e-10
 end
 
 @testitem "PhaseChangeEnergy Top" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -446,7 +446,7 @@ end
 
     T_f = 273.15
     α = 0.5
-    c_i = 2e6
+    c_i = 2.0e6
     Δz = 0.01
     Δt = 3600.0
     T_n = 272.0
@@ -467,7 +467,7 @@ end
 
     expected = h_n + dh_dT * (T_f - T_n) + α * F_i_n + (1 - α) * F_i_np1 -
                (c_i * Δz / Δt) * (T_f - T_n)
-    @test sol[compiled.H_excess][end] ≈ expected rtol = 1e-10
+    @test sol[compiled.H_excess][end] ≈ expected rtol = 1.0e-10
 end
 
 # ========================================================================
@@ -483,8 +483,8 @@ end
     prob = ODEProblem(compiled, params, (0.0, 1.0))
     sol = solve(prob)
 
-    @test sol[compiled.λ_surf][end] ≈ 1.5 rtol = 1e-10
-    @test sol[compiled.c_surf][end] ≈ 2.5e6 rtol = 1e-10
+    @test sol[compiled.λ_surf][end] ≈ 1.5 rtol = 1.0e-10
+    @test sol[compiled.c_surf][end] ≈ 2.5e6 rtol = 1.0e-10
 end
 
 # ========================================================================
@@ -510,7 +510,7 @@ end
     # the temperature should be T_bottom everywhere
     T_final = T_mat[end, :]
     for Tv in T_final
-        @test Tv ≈ T_bottom rtol = 1e-3
+        @test Tv ≈ T_bottom rtol = 1.0e-3
     end
 end
 
@@ -535,7 +535,7 @@ end
 
     # Temperature should be monotonically decreasing from top to bottom
     for i in 1:(length(T_final) - 1)
-        @test T_final[i] ≥ T_final[i + 1] - 1e-6
+        @test T_final[i] ≥ T_final[i + 1] - 1.0e-6
     end
 end
 
@@ -573,7 +573,7 @@ end
     @test T_final[1] ≈ T_surface_analytical rtol = 0.05
 
     # Bottom temperature should be T_iB
-    @test T_final[end] ≈ T_iB rtol = 1e-3
+    @test T_final[end] ≈ T_iB rtol = 1.0e-3
 end
 
 @testitem "RoadHeatConduction - Steady State Zero Flux" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -593,7 +593,7 @@ end
     # All temperatures should remain at initial value (zero flux everywhere)
     T_final = T_mat[end, :]
     for Tv in T_final
-        @test Tv ≈ T_init rtol = 1e-3
+        @test Tv ≈ T_init rtol = 1.0e-3
     end
 end
 
@@ -617,7 +617,7 @@ end
     @test T_final[1] > T_init  # top gets heated
 
     # Surface should be warmest
-    @test T_final[1] ≥ T_final[end] - 1e-6
+    @test T_final[1] ≥ T_final[end] - 1.0e-6
 end
 
 @testitem "RoadHeatConduction - Energy Conservation" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -637,5 +637,5 @@ end
     # With zero flux, average temperature should be constant
     T_initial = T_mat[1, :]
     T_final = T_mat[end, :]
-    @test sum(T_initial) ≈ sum(T_final) rtol = 1e-3
+    @test sum(T_initial) ≈ sum(T_final) rtol = 1.0e-3
 end

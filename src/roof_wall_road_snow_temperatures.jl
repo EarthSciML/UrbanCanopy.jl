@@ -92,8 +92,8 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
         λ_s_sand_coeff = 8.80, [description = "Empirical coefficient for sand in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
         λ_s_clay_coeff = 2.92, [description = "Empirical coefficient for clay in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
         ρ_mineral = 2700.0, [description = "Mineral soil particle density", unit = u"kg/m^3"]
-        λ_dry_numer_coeff = 0.135, [description = "Empirical numerator coefficient in Eq. 4.80 (W m² kg⁻¹ K⁻¹)", unit = u"W*m^2/(kg*K)"]
-        λ_dry_numer_offset = 64.7, [description = "Empirical numerator offset in Eq. 4.80", unit = u"W/(m*K)"]
+        λ_dry_numerator_coeff = 0.135, [description = "Empirical numerator coefficient in Eq. 4.80 (W m² kg⁻¹ K⁻¹)", unit = u"W*m^2/(kg*K)"]
+        λ_dry_numerator_offset = 64.7, [description = "Empirical numerator offset in Eq. 4.80", unit = u"W/(m*K)"]
         λ_dry_denom_offset = 2700.0, [description = "Empirical denominator offset in Eq. 4.80 (dimensionless)"]
         λ_dry_denom_coeff = 0.947, [description = "Empirical denominator coefficient in Eq. 4.80 (dimensionless)"]
         c_s_sand_coeff = 2.128e6, [description = "Empirical coefficient for sand in Eq. 4.86 (J m⁻³ K⁻¹ per %)", unit = u"J/(m^3*K)"]
@@ -139,18 +139,18 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
 
         # Eq. 4.80: λ_dry = (0.135 * ρ_d + 64.7) / (2700 - 0.947 * ρ_d)
         # Denominator is dimensionless (ρ_d divided by reference density)
-        λ_dry ~ (λ_dry_numer_coeff * ρ_d + λ_dry_numer_offset) / (λ_dry_denom_offset - λ_dry_denom_coeff * ρ_d / one_kgm⁻³),
+        λ_dry ~ (λ_dry_numerator_coeff * ρ_d + λ_dry_numerator_offset) / (λ_dry_denom_offset - λ_dry_denom_coeff * ρ_d / one_kgm⁻³),
 
         # Eq. 4.82: S_r = (w_liq / (ρ_liq * Δz) + w_ice / (ρ_ice * Δz)) / θ_sat
         S_r ~ (w_liq / (ρ_liq * Δz) + w_ice / (ρ_ice * Δz)) / θ_sat,
 
         # Eq. 4.81: Kersten number (unfrozen: K_e = log(S_r) + 1 ≥ 0; frozen: K_e = S_r)
         K_e ~ ifelse(T_i ≥ T_f,
-            max(log(max(S_r, 1e-10)) + 1.0, 0.0),
+            max(log(max(S_r, 1.0e-10)) + 1.0, 0.0),
             S_r),
 
-        # Eq. 4.77: λ = K_e * λ_sat + (1 - K_e) * λ_dry for S_r > 1e-7
-        λ_soil ~ ifelse(S_r > 1e-7,
+        # Eq. 4.77: λ = K_e * λ_sat + (1 - K_e) * λ_dry for S_r > 1.0e-7
+        λ_soil ~ ifelse(S_r > 1.0e-7,
             K_e * λ_sat + (1 - K_e) * λ_dry,
             λ_dry),
 

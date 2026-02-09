@@ -46,7 +46,7 @@ jobs:
           julia -e '
             using Pkg
             Pkg.activate(".")
-            Pkg.develop(url="https://github.com/ctessum-claude/MethodOfLines.jl.git", rev="fix-units-discretization")
+            Pkg.add(url="https://github.com/ctessum-claude/MethodOfLines.jl.git", rev="fix-units-discretization")
           '
 
       - uses: julia-actions/julia-buildpkg@v1

@@ -74,6 +74,7 @@ For roads:
 
 ```@example ch4_temps
 using DataFrames, ModelingToolkit, Symbolics, DynamicQuantities
+using UrbanCanopy
 
 sys_soil = SoilThermalProperties()
 
@@ -126,7 +127,6 @@ where ``S_r`` is the degree of saturation; for frozen soil, ``K_e = S_r``.
 
 ```@example ch4_temps
 using OrdinaryDiffEqDefault
-using UrbanCanopy
 
 sys = SoilThermalProperties()
 compiled = mtkcompile(sys)
@@ -410,6 +410,8 @@ temperature remains uniform at its initial value, demonstrating energy
 conservation.
 
 ```@example ch4_temps
+using Statistics
+
 T_init = 288.15
 result_road = RoadHeatConduction(;
     N_layers = 15,
@@ -423,7 +425,6 @@ T_mat_road = sol_road[result_road.T(result_road.t_pde, result_road.z_var)]
 t_disc = sol_road[result_road.t_pde]
 avg_T = [mean(T_mat_road[i, :]) for i in 1:length(t_disc)]
 
-using Statistics
 p = plot(t_disc, avg_T, linewidth=2, label="Mean temperature",
     xlabel="Time (s)", ylabel="Temperature (K)",
     title="Road Energy Conservation (zero flux BCs)", legend=:topright)
