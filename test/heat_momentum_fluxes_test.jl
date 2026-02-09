@@ -308,6 +308,87 @@ end
     @test sol_vu[compiled.ψ_m_atm][end] > sol_mu[compiled.ψ_m_atm][end]
 end
 
+@testitem "Stability Functions - Quantitative ψ_m" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    # Verify ψ_m values against analytically computed reference values.
+    # For the unstable regime (-1.574 ≤ ζ < 0), ψ_m is given by Eq. 3.37:
+    #   ψ_m = 2ln((1+x)/2) + ln((1+x²)/2) - 2atan(x) + π/2, x = (1-16ζ)^{1/4}
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+
+    # Test at ζ = -0.5 (unstable regime)
+    params_test = copy(params)
+    params_test[compiled.ζ_in] = -0.5
+    sol = solve_system(compiled, params_test)
+
+    x = (1 - 16 * (-0.5))^(1 / 4)
+    ψ_m_expected = 2 * log((1 + x) / 2) + log((1 + x^2) / 2) - 2 * atan(x) + π / 2
+    @test sol[compiled.ψ_m_atm][end] ≈ ψ_m_expected rtol = 1.0e-6
+
+    # Test at ζ = 0.5 (stable regime): ψ_m = -5ζ
+    params_test[compiled.ζ_in] = 0.5
+    sol2 = solve_system(compiled, params_test)
+    @test sol2[compiled.ψ_m_atm][end] ≈ -5 * 0.5 rtol = 1.0e-6
+
+    # Test continuity at ζ_m = -1.574 transition
+    # Evaluate ψ_m at ζ just above and below the transition
+    params_test[compiled.ζ_in] = -1.573
+    sol_above = solve_system(compiled, params_test)
+    params_test[compiled.ζ_in] = -1.575
+    sol_below = solve_system(compiled, params_test)
+    @test sol_above[compiled.ψ_m_atm][end] ≈ sol_below[compiled.ψ_m_atm][end] rtol = 0.01
+
+    # Test very unstable ψ_m at ζ = -3.0 (Eq. 3.33 derived):
+    # ψ_m(ζ) = ψ_m(ζ_m) + ln(ζ/ζ_m) - 1.14[(-ζ)^{1/3} - (-ζ_m)^{1/3}]
+    ζ_m = -1.574
+    x_m = (1 - 16 * ζ_m)^(1 / 4)
+    ψ_m_at_trans = 2 * log((1 + x_m) / 2) + log((1 + x_m^2) / 2) - 2 * atan(x_m) + π / 2
+    ζ_test = -3.0
+    ψ_m_vu_expected = ψ_m_at_trans + log(ζ_test / ζ_m) - 1.14 * ((-ζ_test)^(1 / 3) - (-ζ_m)^(1 / 3))
+
+    params_test[compiled.ζ_in] = ζ_test
+    sol_vu = solve_system(compiled, params_test)
+    @test sol_vu[compiled.ψ_m_atm][end] ≈ ψ_m_vu_expected rtol = 1.0e-6
+end
+
+@testitem "Stability Functions - Quantitative ψ_h" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    # Verify ψ_h values against analytically computed reference values.
+    # For the unstable regime (-0.465 ≤ ζ < 0), ψ_h is given by Eq. 3.46:
+    #   ψ_h = 2ln((1+x²)/2), x = (1-16ζ)^{1/4}
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+
+    # Test at ζ_h = (z_atm_h - d)/L; for the test we use ζ_in to control ζ_h indirectly.
+    # Since ζ_h = (z_atm_h - d)/L and ζ_in = (z_atm_m - d)/L, when z_atm_h = z_atm_m,
+    # ζ_h = ζ_in.
+    # Test at ζ = -0.3 (unstable regime)
+    params_test = copy(params)
+    params_test[compiled.ζ_in] = -0.3
+    sol = solve_system(compiled, params_test)
+
+    x = (1 - 16 * (-0.3))^(1 / 4)
+    ψ_h_expected = 2 * log((1 + x^2) / 2)
+    @test sol[compiled.ψ_h_atm][end] ≈ ψ_h_expected rtol = 1.0e-6
+
+    # Test continuity at ζ_h = -0.465 transition
+    params_test[compiled.ζ_in] = -0.464
+    sol_above = solve_system(compiled, params_test)
+    params_test[compiled.ζ_in] = -0.466
+    sol_below = solve_system(compiled, params_test)
+    @test sol_above[compiled.ψ_h_atm][end] ≈ sol_below[compiled.ψ_h_atm][end] rtol = 0.01
+
+    # Test very unstable ψ_h at ζ = -2.0 (Eq. 3.38 derived):
+    # ψ_h(ζ) = ψ_h(ζ_h_trans) + ln(ζ/ζ_h_trans) + 0.8[(-ζ)^{-1/3} - (-ζ_h_trans)^{-1/3}]
+    ζ_h_trans = -0.465
+    x_h = (1 - 16 * ζ_h_trans)^(1 / 4)
+    ψ_h_at_trans = 2 * log((1 + x_h^2) / 2)
+    ζ_test = -2.0
+    ψ_h_vu_expected = ψ_h_at_trans + log(ζ_test / ζ_h_trans) + 0.8 * ((-ζ_test)^(-1 / 3) - (-ζ_h_trans)^(-1 / 3))
+
+    params_test[compiled.ζ_in] = ζ_test
+    sol_vu = solve_system(compiled, params_test)
+    @test sol_vu[compiled.ψ_h_atm][end] ≈ ψ_h_vu_expected rtol = 1.0e-6
+end
+
 @testitem "Stability Functions - Very Stable" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
     sys = HeatMomentumFluxes()
     compiled, params = default_params(sys)
@@ -638,4 +719,35 @@ end
 
     dH_fd = (sol_plus[compiled.H_roof][end] - sol_minus[compiled.H_roof][end]) / (2 * ΔT)
     @test sol[compiled.dH_roof_dT][end] ≈ dH_fd rtol = 0.01
+end
+
+@testitem "H_total Consistency (Eq. 3.74)" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    # Eq. 3.74: H = -ρ C_p (θ_atm - T_ac)/r_ah should equal the area-weighted sum
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+    sol = solve_system(compiled, params)
+
+    ρ = 1.2
+    C_p = 1004.64
+    θ_atm = 300.0
+    T_ac = sol[compiled.T_ac][end]
+    r_ah = sol[compiled.r_ah][end]
+
+    H_from_lhs = -ρ * C_p * (θ_atm - T_ac) / r_ah
+    H_from_rhs = sol[compiled.H_total][end]
+
+    @test H_from_lhs ≈ H_from_rhs rtol = 1.0e-4
+end
+
+@testitem "Very Stable ψ_m Quantitative" setup = [HeatMomentumSetup] tags = [:heat_momentum] begin
+    # For ζ > 1 (very stable), ψ_m = -(4 + 4ln(ζ) + ζ), derived from Eq. 3.36
+    sys = HeatMomentumFluxes()
+    compiled, params = default_params(sys)
+
+    params_test = copy(params)
+    params_test[compiled.ζ_in] = 2.0
+    sol = solve_system(compiled, params_test)
+
+    ψ_m_expected = -(4 + 4 * log(2.0) + 2.0)
+    @test sol[compiled.ψ_m_atm][end] ≈ ψ_m_expected rtol = 1.0e-6
 end

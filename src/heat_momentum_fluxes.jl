@@ -35,8 +35,6 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     # Unit reference constants for non-integer exponents and dimensional comparisons
     @constants begin
         one_ms = 1.0, [description = "Unit velocity", unit = u"m/s"]
-        one_K = 1.0, [description = "Unit temperature", unit = u"K"]
-        one_kgkg = 1.0, [description = "Unit specific humidity", unit = u"kg/kg"]
         zero_ms = 0.0, [description = "Zero velocity", unit = u"m/s"]
         π_val = Float64(π), [description = "Pi (dimensionless)"]
     end
@@ -52,7 +50,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     @constants begin
         β_conv = 1.0, [description = "Convective velocity coefficient (Eq. 3.29) (dimensionless)"]
         z_i = 1000.0, [description = "Convective boundary layer height (Eq. 3.30)", unit = u"m"]
-        zero_61 = 0.61, [description = "Virtual temperature coefficient (dimensionless)"]
+        c_virt = 0.61, [description = "Virtual potential temperature coefficient, (ε-1) where ε=M_a/M_w (dimensionless)"]
         one_m = 1.0, [description = "Unit length for non-dimensionalization", unit = u"m"]
     end
 
@@ -254,7 +252,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         ζ_m_trans = -1.574
         x_trans = (1 - 16 * ζ_m_trans)^(1 / 4)
         ψ_m_at_trans = 2 * log((1 + x_trans) / 2) + log((1 + x_trans^2) / 2) - 2 * atan(x_trans) + π_val / 2
-        ψ_very_unstable = ψ_m_at_trans + log(ζ_val / ζ_m_trans) + 1.14 * ((-ζ_val)^(1 / 3) - (-ζ_m_trans)^(1 / 3))  # From Eq. 3.33
+        ψ_very_unstable = ψ_m_at_trans + log(ζ_val / ζ_m_trans) - 1.14 * ((-ζ_val)^(1 / 3) - (-ζ_m_trans)^(1 / 3))  # From Eq. 3.33
 
         # Very stable: ψ_m(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.36)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
@@ -278,7 +276,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
         ζ_h_trans = -0.465
         x_trans = (1 - 16 * ζ_h_trans)^(1 / 4)
         ψ_h_at_trans = 2 * log((1 + x_trans^2) / 2)
-        ψ_very_unstable = ψ_h_at_trans + log(ζ_val / ζ_h_trans) + 0.8 * ((-ζ_h_trans)^(-1 / 3) - (-ζ_val)^(-1 / 3))  # From Eq. 3.38
+        ψ_very_unstable = ψ_h_at_trans + log(ζ_val / ζ_h_trans) + 0.8 * ((-ζ_val)^(-1 / 3) - (-ζ_h_trans)^(-1 / 3))  # From Eq. 3.38
 
         # Very stable: ψ_h(ζ>1) = -4ln(ζ) - ζ - 4 (derived from Eq. 3.41)
         ψ_very_stable = -4 * log(ζ_val) - ζ_val - 4
@@ -300,7 +298,7 @@ Boulder, CO, 168 pp. Chapter 3: Heat and Momentum Fluxes (pp. 61-89).
     push!(eqs, ψ_w_0 ~ _ψ_h(ζ_0w))
 
     # ===== Virtual Potential Temperature =====
-    push!(eqs, θ_v_atm ~ θ_atm * (1 + zero_61 * q_atm))                          # θ_v,atm = θ̄_atm(1 + 0.61*q_atm)
+    push!(eqs, θ_v_atm ~ θ_atm * (1 + c_virt * q_atm))                          # θ_v,atm = θ̄_atm(1 + 0.61*q_atm)
 
     # ===== Convective Velocity (Eqs. 3.29-3.30) =====
     # U_c = 0 for stable (ζ ≥ 0), U_c = β*w* for unstable (ζ < 0)
