@@ -16,7 +16,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     env:
-      GROUP: ${{ matrix.group }}    
+      GROUP: ${{ matrix.group }}
     strategy:
       fail-fast: false
       matrix:
@@ -36,9 +36,16 @@ jobs:
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Pkg,TOML,Statistics,Random
-          julia_version: '1'
       - uses: julia-actions/cache@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Install custom MethodOfLines.jl fork"
+        run: |
+          julia -e '
+            using Pkg
+            Pkg.activate(".")
+            Pkg.develop(url="https://github.com/ctessum-claude/MethodOfLines.jl.git")
+          '
+          cd ~/.julia/dev/MethodOfLines && git checkout fix-units-discretization
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
