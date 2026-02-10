@@ -35,6 +35,14 @@ The implementation provides modular components for:
     correction after phase change (Eqs. 4.60--4.65)
 13. **Snow melt without layers**: Snow melt when snow is present but has no
     explicit layers (Eqs. 4.66--4.71)
+14. **Grid discretization**: Uniform grid for roofs/walls and exponential grid
+    for roads (Eqs. 4.5--4.8)
+15. **Freezing point depression**: Maximum liquid water content below freezing
+    via supercooled soil water (Eq. 4.58)
+16. **Snow-soil blended heat capacity**: Top layer heat capacity blending when
+    snow is present but has no explicit layers (Eq. 4.88)
+17. **Phase change energy**: Per-layer and total phase change energy for
+    freezing/thawing assessment (Eqs. 4.72--4.73)
 
 **Limitation**: The full PDE heat conduction solver (Eqs. 4.1--4.4) with Crank-Nicholson
 time discretization (Eqs. 4.14--4.25) is not yet implemented. The components above
@@ -62,6 +70,12 @@ HeatingCoolingFlux
 PhaseChangeEnergy
 PhaseChangeAdjustment
 SnowMeltNoLayers
+UniformGrid
+ExponentialGrid
+FreezingPointDepression
+SnowSoilBlendedHeatCapacity
+LayerPhaseChangeEnergy
+TotalPhaseChangeEnergy
 ```
 
 ## Implementation
@@ -197,6 +211,113 @@ DataFrame(
 
 ```@example ch4_temps
 eqs = equations(sys_sml)
+```
+
+#### Grid Discretization
+
+```@example ch4_temps
+sys_ug = UniformGrid(N=5)
+
+vars = unknowns(sys_ug)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_ug)
+```
+
+```@example ch4_temps
+sys_eg = ExponentialGrid(N=5)
+
+vars = unknowns(sys_eg)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_eg)
+```
+
+#### Freezing Point Depression
+
+```@example ch4_temps
+sys_fpd = FreezingPointDepression()
+
+vars = unknowns(sys_fpd)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+params = parameters(sys_fpd)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape=false)) for p in params],
+    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_fpd)
+```
+
+#### Snow-Soil Blended Heat Capacity
+
+```@example ch4_temps
+sys_ssbhc = SnowSoilBlendedHeatCapacity()
+
+vars = unknowns(sys_ssbhc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_ssbhc)
+```
+
+#### Phase Change Energy
+
+```@example ch4_temps
+sys_lpe = LayerPhaseChangeEnergy()
+
+vars = unknowns(sys_lpe)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_lpe)
+```
+
+```@example ch4_temps
+sys_tpe = TotalPhaseChangeEnergy()
+
+vars = unknowns(sys_tpe)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example ch4_temps
+eqs = equations(sys_tpe)
 ```
 
 ## Analysis
@@ -441,3 +562,80 @@ As the roof fraction increases, the building temperature shifts from the
 wall-dominated average towards the roof temperature. At small roof fractions,
 the two wall surfaces dominate and ``T_{iB}`` lies between ``T_{sunwall}`` and
 ``T_{shdwall}``.
+
+### Grid Discretization (Eqs. 4.5--4.8)
+
+Roofs and walls use a uniform grid (Eq. 4.5) while roads use an exponential
+grid (Eq. 4.8) that provides finer resolution near the surface. The exponential
+scaling factor ``f_s = 0.025`` m concentrates layers where the diurnal thermal
+wave has the largest amplitude.
+
+```@example ch4_temps
+using OrdinaryDiffEqDefault
+
+N = 10
+sys_ug = UniformGrid(N=N)
+compiled_ug = mtkcompile(sys_ug)
+prob_ug = ODEProblem(compiled_ug, [compiled_ug.Δz_total => 0.5], (0.0, 1.0))
+sol_ug = solve(prob_ug)
+
+sys_eg = ExponentialGrid(N=N)
+compiled_eg = mtkcompile(sys_eg)
+prob_eg = ODEProblem(compiled_eg, [], (0.0, 1.0))
+sol_eg = solve(prob_eg)
+
+obs_ug = Dict(string(o.lhs) => o.lhs for o in observed(compiled_ug))
+obs_eg = Dict(string(o.lhs) => o.lhs for o in observed(compiled_eg))
+
+z_uniform = [sol_ug[obs_ug["z_node[$i](t)"]][end] for i in 1:N]
+z_exp = [sol_eg[obs_eg["z_node[$i](t)"]][end] for i in 1:N]
+
+p = plot(1:N, z_uniform, marker=:circle, label="Uniform (roof/wall)", linewidth=2,
+    xlabel="Layer Index", ylabel="Node Depth (m)",
+    title="Grid Node Depths (Eqs. 4.5, 4.8)", legend=:topleft)
+plot!(p, 1:N, z_exp, marker=:square, label="Exponential (road)", linewidth=2)
+p
+```
+
+The uniform grid spaces nodes equally, while the exponential grid clusters
+nodes near the surface (small indices) and spaces them progressively farther
+apart at depth, providing better resolution where surface forcing varies most.
+
+### Freezing Point Depression (Eq. 4.58)
+
+Below the freezing point, liquid water coexists with ice in soil through a
+freezing point depression mechanism. The maximum liquid water content decreases
+with temperature according to the matric potential relationship.
+
+```@example ch4_temps
+sys_fpd = FreezingPointDepression()
+compiled_fpd = mtkcompile(sys_fpd)
+
+T_range = 253.15:0.5:273.15
+w_liq_vals = Float64[]
+
+for T in T_range
+    p = Dict(
+        compiled_fpd.T_i => T,
+        compiled_fpd.θ_sat => 0.4,
+        compiled_fpd.Δz => 0.5,
+        compiled_fpd.ψ_sat => -0.1,
+        compiled_fpd.B_i => 5.0,
+        compiled_fpd.ρ_liq => 1000.0,
+    )
+    prob = ODEProblem(compiled_fpd, p, (0.0, 1.0))
+    sol = solve(prob)
+    push!(w_liq_vals, sol[compiled_fpd.w_liq_max][end])
+end
+
+p = plot(T_range .- 273.15, w_liq_vals, linewidth=2, label="w_liq_max",
+    xlabel="Temperature (°C)", ylabel="Max Liquid Water (kg m⁻²)",
+    title="Freezing Point Depression (Eq. 4.58)", legend=:topleft)
+vline!(p, [0.0], label="T_f", linestyle=:dash, color=:gray)
+p
+```
+
+At the freezing point (0°C), the maximum liquid water equals the fully
+saturated value ``\Delta z \cdot \theta_{sat} \cdot \rho_{liq}``. As
+temperature decreases below freezing, the available liquid water decreases
+rapidly following the Clapp and Hornberger (1978) relationship.

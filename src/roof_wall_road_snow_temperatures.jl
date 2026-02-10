@@ -3,7 +3,10 @@ export SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperti
     SurfaceEnergyFlux, BuildingTemperature, WasteHeatAirConditioning,
     PhaseChangeEnergy, SnowLayerGeometry,
     WasteHeatAllocation, AdjustedLayerThickness, HeatingCoolingFlux,
-    PhaseChangeAdjustment, SnowMeltNoLayers
+    PhaseChangeAdjustment, SnowMeltNoLayers,
+    UniformGrid, ExponentialGrid,
+    FreezingPointDepression, SnowSoilBlendedHeatCapacity,
+    TotalPhaseChangeEnergy, LayerPhaseChangeEnergy
 
 """
     SnowLayerGeometry(; name=:SnowLayerGeometry)
@@ -805,6 +808,276 @@ proportionally.
 
         # Eq. 4.71: E_{p,1S} = L_f * M_{1S}
         E_p1S ~ L_f * M_1S,
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    UniformGrid(; name=:UniformGrid, N=15)
+
+Computes the uniform grid discretization for roofs and walls, following Eqs. 4.5–4.7
+of Oleson et al. (2010). Roofs and walls are discretized into `N` layers of equal
+thickness, with node depths at layer midpoints and interface depths between layers.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Section 4.1, Eqs. 4.5–4.7, pp. 91.
+"""
+@component function UniformGrid(; name = :UniformGrid, N = 15)
+
+    @parameters begin
+        Δz_total, [description = "Total thickness of the roof or wall (Table 1.3)", unit = u"m"]
+    end
+
+    # Note: z_interface has N+1 entries (indices 1 to N+1) corresponding to
+    # paper indices i=0,...,N. z_interface[1] = z_{h,0}, z_interface[N+1] = z_{h,N}.
+    @variables begin
+        z_node[1:N](t), [description = "Node depth of layer i (Eq. 4.5)", unit = u"m"]
+        Δz_layer[1:N](t), [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
+        z_interface[1:(N + 1)](t), [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
+    end
+
+    eqs = Equation[]
+
+    for i in 1:N
+        # Eq. 4.5: z_i = (i - 0.5) * (Δz / N_levgrnd)
+        push!(eqs, z_node[i] ~ (i - 0.5) * (Δz_total / N))
+    end
+
+    for i in 1:N
+        if i == 1
+            # Eq. 4.6: Δz_1 = 0.5 * (z_1 + z_2)
+            push!(eqs, Δz_layer[i] ~ 0.5 * (z_node[1] + z_node[2]))
+        elseif i == N
+            # Eq. 4.6: Δz_N = z_N - z_{N-1}
+            push!(eqs, Δz_layer[i] ~ z_node[N] - z_node[N - 1])
+        else
+            # Eq. 4.6: Δz_i = 0.5 * (z_{i+1} - z_{i-1})
+            push!(eqs, Δz_layer[i] ~ 0.5 * (z_node[i + 1] - z_node[i - 1]))
+        end
+    end
+
+    # Eq. 4.7: Interface depths (shifted by +1 for 1-based indexing)
+    # z_{h,0} = 0  →  z_interface[1]
+    push!(eqs, z_interface[1] ~ 0 * Δz_total)
+    for i in 1:(N - 1)
+        # z_{h,i} = 0.5 * (z_i + z_{i+1})  →  z_interface[i+1]
+        push!(eqs, z_interface[i + 1] ~ 0.5 * (z_node[i] + z_node[i + 1]))
+    end
+    # z_{h,N} = z_N + 0.5 * Δz_N  →  z_interface[N+1]
+    push!(eqs, z_interface[N + 1] ~ z_node[N] + 0.5 * Δz_layer[N])
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    ExponentialGrid(; name=:ExponentialGrid, N=15)
+
+Computes the exponential grid discretization for pervious and impervious road columns,
+following Eq. 4.8 and Eqs. 4.6–4.7 of Oleson et al. (2010). The scaling factor
+`f_s = 0.025` produces finer resolution near the surface, which is needed because
+roads overlie real soil.
+
+Layer thicknesses and interface depths are computed from Eqs. 4.6 and 4.7.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Section 4.1, Eqs. 4.6–4.8, pp. 91–92.
+"""
+@component function ExponentialGrid(; name = :ExponentialGrid, N = 15)
+
+    @constants begin
+        f_s = 0.025, [description = "Scaling factor for road grid (Eq. 4.8)", unit = u"m"]
+    end
+
+    # Note: z_interface has N+1 entries (indices 1 to N+1) corresponding to
+    # paper indices i=0,...,N. z_interface[1] = z_{h,0}, z_interface[N+1] = z_{h,N}.
+    @variables begin
+        z_node[1:N](t), [description = "Node depth of layer i (Eq. 4.8)", unit = u"m"]
+        Δz_layer[1:N](t), [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
+        z_interface[1:(N + 1)](t), [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
+    end
+
+    eqs = Equation[]
+
+    for i in 1:N
+        # Eq. 4.8: z_i = f_s * {exp[0.5*(i - 0.5)] - 1}
+        push!(eqs, z_node[i] ~ f_s * (exp(0.5 * (i - 0.5)) - 1))
+    end
+
+    for i in 1:N
+        if i == 1
+            # Eq. 4.6: Δz_1 = 0.5 * (z_1 + z_2)
+            push!(eqs, Δz_layer[i] ~ 0.5 * (z_node[1] + z_node[2]))
+        elseif i == N
+            # Eq. 4.6: Δz_N = z_N - z_{N-1}
+            push!(eqs, Δz_layer[i] ~ z_node[N] - z_node[N - 1])
+        else
+            # Eq. 4.6: Δz_i = 0.5 * (z_{i+1} - z_{i-1})
+            push!(eqs, Δz_layer[i] ~ 0.5 * (z_node[i + 1] - z_node[i - 1]))
+        end
+    end
+
+    # Eq. 4.7: Interface depths (shifted by +1 for 1-based indexing)
+    # z_{h,0} = 0  →  z_interface[1]
+    push!(eqs, z_interface[1] ~ 0 * f_s)
+    for i in 1:(N - 1)
+        # z_{h,i} = 0.5 * (z_i + z_{i+1})  →  z_interface[i+1]
+        push!(eqs, z_interface[i + 1] ~ 0.5 * (z_node[i] + z_node[i + 1]))
+    end
+    # z_{h,N} = z_N + 0.5 * Δz_N  →  z_interface[N+1]
+    push!(eqs, z_interface[N + 1] ~ z_node[N] + 0.5 * Δz_layer[N])
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    FreezingPointDepression(; name=:FreezingPointDepression)
+
+Computes the maximum liquid water content in a soil layer when the temperature is
+below the freezing point, following Eq. 4.58 of Oleson et al. (2010).
+
+The concept of supercooled soil water from Niu and Yang (2006) is used, where liquid
+water coexists with ice below freezing through a freezing point depression equation.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Section 4.2, Eq. 4.58, pp. 103.
+"""
+@component function FreezingPointDepression(; name = :FreezingPointDepression)
+
+    @constants begin
+        T_f = 273.15, [description = "Freezing temperature of water (Table 1.4)", unit = u"K"]
+        L_f = 3.337e5, [description = "Latent heat of fusion (Table 1.4)", unit = u"J/kg"]
+        g = 9.80616, [description = "Gravitational acceleration (Table 1.4)", unit = u"m/s^2"]
+        one_ref = 1.0, [description = "Dimensionless reference for non-dimensionalization (dimensionless)"]
+    end
+
+    @parameters begin
+        T_i, [description = "Layer temperature", unit = u"K"]
+        θ_sat, [description = "Porosity (dimensionless)"]
+        Δz, [description = "Layer thickness", unit = u"m"]
+        ψ_sat, [description = "Saturated matric potential (converted to SI)", unit = u"m"]
+        B_i, [description = "Clapp and Hornberger exponent (dimensionless)"]
+        ρ_liq, [description = "Density of liquid water", unit = u"kg/m^3"]
+    end
+
+    @variables begin
+        w_liq_max(t), [description = "Maximum liquid water when T < T_f (Eq. 4.58)", unit = u"kg/m^2"]
+    end
+
+    eqs = [
+        # Eq. 4.58: w_{liq,max,i} = Δz_i * θ_{sat,i} * ρ_liq *
+        #   [10^3 * L_f * (T_f - T_i) / (g * T_i * ψ_{sat,i})]^{-1/B_i}
+        # The paper uses ψ_sat in mm. Since our ψ_sat is already in SI (m),
+        # the 10^3 conversion factor is absorbed. ψ_sat is negative by
+        # convention (soil matric potential), so we negate it to keep the
+        # base positive for the fractional exponent.
+        # Dimensional check (dimensionless inside brackets):
+        #   L_f [J/kg] * ΔT [K] / (g [m/s^2] * T [K] * |ψ| [m])
+        #   = [m^2/s^2] / [m^2/s^2] = dimensionless
+        w_liq_max ~ ifelse(
+            T_i < T_f,
+            Δz * θ_sat * ρ_liq * (L_f * (T_f - T_i) / (g * T_i * (-ψ_sat)) * one_ref)^(-1 / B_i),
+            Δz * θ_sat * ρ_liq
+        ),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    SnowSoilBlendedHeatCapacity(; name=:SnowSoilBlendedHeatCapacity)
+
+Computes the blended heat capacity of the top soil layer when snow is present but
+there are no explicit snow layers (snl = 0), following Eq. 4.88 of Oleson et al. (2010).
+
+The heat capacity is the soil heat capacity (from Eq. 4.85) plus an additional term
+from the snow mass distributed over the top layer.
+
+**Reference**: Oleson et al. (2010), Chapter 4, Section 4.3, Eq. 4.88, pp. 109.
+"""
+@component function SnowSoilBlendedHeatCapacity(; name = :SnowSoilBlendedHeatCapacity)
+
+    @constants begin
+        C_ice = 2117.27, [description = "Specific heat of ice (Table 1.4)", unit = u"J/(kg*K)"]
+    end
+
+    @parameters begin
+        c_soil, [description = "Soil volumetric heat capacity from Eq. 4.85", unit = u"J/(m^3*K)"]
+        W_sno, [description = "Snow mass", unit = u"kg/m^2"]
+        Δz, [description = "Top layer thickness", unit = u"m"]
+    end
+
+    @variables begin
+        c_blended(t), [description = "Blended heat capacity (Eq. 4.88)", unit = u"J/(m^3*K)"]
+    end
+
+    eqs = [
+        # Eq. 4.88: c_i = c_i* + C_ice * W_sno / Δz_i
+        c_blended ~ c_soil + C_ice * W_sno / Δz,
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    LayerPhaseChangeEnergy(; name=:LayerPhaseChangeEnergy)
+
+Computes the phase change energy for a single layer, following Eq. 4.73 of
+Oleson et al. (2010). This is used to sum contributions across all layers to
+obtain the total phase change energy (Eq. 4.72).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eq. 4.73, pp. 106.
+"""
+@component function LayerPhaseChangeEnergy(; name = :LayerPhaseChangeEnergy)
+
+    @constants begin
+        L_f = 3.337e5, [description = "Latent heat of fusion (Table 1.4)", unit = u"J/kg"]
+    end
+
+    @parameters begin
+        w_ice_n, [description = "Ice mass at time n", unit = u"kg/m^2"]
+        w_ice_np1, [description = "Ice mass at time n+1", unit = u"kg/m^2"]
+        Δt, [description = "Time step", unit = u"s"]
+    end
+
+    @variables begin
+        E_p(t), [description = "Phase change energy for layer (Eq. 4.73)", unit = u"W/m^2"]
+    end
+
+    eqs = [
+        # Eq. 4.73: E_{p,i} = L_f * (w_{ice,i}^n - w_{ice,i}^{n+1}) / Δt
+        E_p ~ L_f * (w_ice_n - w_ice_np1) / Δt,
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    TotalPhaseChangeEnergy(; name=:TotalPhaseChangeEnergy)
+
+Computes the total phase change energy for the column, following Eq. 4.72 of
+Oleson et al. (2010). The total is the sum of the surface snow melt energy (Eq. 4.71)
+and the per-layer phase change energies (Eq. 4.73).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.72–4.73, pp. 105–106.
+"""
+@component function TotalPhaseChangeEnergy(; name = :TotalPhaseChangeEnergy)
+
+    @parameters begin
+        E_p1S, [description = "Surface snow melt energy (Eq. 4.71)", unit = u"W/m^2"]
+        E_p_layers, [description = "Sum of per-layer phase change energies (Eq. 4.73)", unit = u"W/m^2"]
+    end
+
+    @variables begin
+        E_p_total(t), [description = "Total phase change energy (Eq. 4.72)", unit = u"W/m^2"]
+    end
+
+    eqs = [
+        # Eq. 4.72: E_p = E_{p,1S} + Σ E_{p,i}
+        E_p_total ~ E_p1S + E_p_layers,
     ]
 
     return System(eqs, t; name)

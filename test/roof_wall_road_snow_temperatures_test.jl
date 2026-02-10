@@ -904,3 +904,368 @@ end
     @test sol[compiled.λ_surf][end] ≈ 1.5 rtol = 1.0e-10
     @test sol[compiled.c_surf][end] ≈ 2.5e6 rtol = 1.0e-10
 end
+
+# ========================================================================
+# Uniform Grid Tests
+# ========================================================================
+
+@testitem "UniformGrid - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = UniformGrid(N = 3)
+
+    @test length(equations(sys)) == 10  # 3 nodes + 3 thicknesses + 4 interfaces
+    @test length(unknowns(sys)) == 10
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "UniformGrid - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    N = 3
+    sys = UniformGrid(N = N)
+    compiled = mtkcompile(sys)
+
+    Δz_total = 0.3  # 30 cm total thickness
+
+    prob = ODEProblem(compiled, [compiled.Δz_total => Δz_total], (0.0, 1.0))
+    sol = solve(prob)
+
+    # Access observed variables through the observed list
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+
+    # Eq. 4.5: z_i = (i - 0.5) * (Δz / N)
+    for i in 1:N
+        expected_z = (i - 0.5) * (Δz_total / N)
+        @test sol[obs["z_node[$i](t)"]][end] ≈ expected_z rtol = 1.0e-10
+    end
+
+    # All layer thicknesses should be equal for uniform grid = Δz_total / N
+    expected_Δz = Δz_total / N
+    for i in 1:N
+        @test sol[obs["Δz_layer[$i](t)"]][end] ≈ expected_Δz rtol = 1.0e-6
+    end
+
+    # z_interface[1] = z_{h,0} = 0 (top surface)
+    @test sol[obs["z_interface[1](t)"]][end] ≈ 0.0 atol = 1.0e-12
+
+    # z_interface[N+1] = z_{h,N} = Δz_total (bottom)
+    @test sol[obs["z_interface[$(N + 1)](t)"]][end] ≈ Δz_total rtol = 1.0e-6
+end
+
+@testitem "UniformGrid - Node at Midpoint" setup = [TempSetup] tags = [:ch4_temps] begin
+    N = 5
+    sys = UniformGrid(N = N)
+    compiled = mtkcompile(sys)
+
+    prob = ODEProblem(compiled, [compiled.Δz_total => 1.0], (0.0, 1.0))
+    sol = solve(prob)
+
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+
+    # Each node should be at the midpoint of its layer
+    for i in 1:N
+        node = sol[obs["z_node[$i](t)"]][end]
+        z_top = sol[obs["z_interface[$i](t)"]][end]
+        z_bot = sol[obs["z_interface[$(i + 1)](t)"]][end]
+        midpoint = 0.5 * (z_top + z_bot)
+        @test node ≈ midpoint rtol = 1.0e-6
+    end
+end
+
+# ========================================================================
+# Exponential Grid Tests
+# ========================================================================
+
+@testitem "ExponentialGrid - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = ExponentialGrid(N = 3)
+
+    @test length(equations(sys)) == 10
+    @test length(unknowns(sys)) == 10
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "ExponentialGrid - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    N = 5
+    sys = ExponentialGrid(N = N)
+    compiled = mtkcompile(sys)
+
+    prob = ODEProblem(compiled, [], (0.0, 1.0))
+    sol = solve(prob)
+
+    # Access observed variables through the observed list
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+
+    f_s = 0.025
+
+    # Eq. 4.8: z_i = f_s * (exp(0.5*(i-0.5)) - 1)
+    for i in 1:N
+        expected_z = f_s * (exp(0.5 * (i - 0.5)) - 1)
+        @test sol[obs["z_node[$i](t)"]][end] ≈ expected_z rtol = 1.0e-10
+    end
+
+    # z_interface[1] = z_{h,0} = 0
+    @test sol[obs["z_interface[1](t)"]][end] ≈ 0.0 atol = 1.0e-12
+
+    # Layer thicknesses should increase with depth (exponential spacing)
+    for i in 2:N
+        @test sol[obs["Δz_layer[$i](t)"]][end] > sol[obs["Δz_layer[$(i - 1)](t)"]][end]
+    end
+end
+
+@testitem "ExponentialGrid - Increasing Depth" setup = [TempSetup] tags = [:ch4_temps] begin
+    N = 15
+    sys = ExponentialGrid(N = N)
+    compiled = mtkcompile(sys)
+
+    prob = ODEProblem(compiled, [], (0.0, 1.0))
+    sol = solve(prob)
+
+    # Access observed variables through the observed list
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+
+    # Node depths should be monotonically increasing
+    for i in 2:N
+        @test sol[obs["z_node[$i](t)"]][end] > sol[obs["z_node[$(i - 1)](t)"]][end]
+    end
+
+    # Interface depths should be monotonically increasing
+    for i in 2:(N + 1)
+        @test sol[obs["z_interface[$i](t)"]][end] > sol[obs["z_interface[$(i - 1)](t)"]][end]
+    end
+end
+
+# ========================================================================
+# Freezing Point Depression Tests
+# ========================================================================
+
+@testitem "FreezingPointDepression - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = FreezingPointDepression()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "FreezingPointDepression - Above Freezing" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = FreezingPointDepression()
+    compiled = mtkcompile(sys)
+
+    # Above freezing: w_liq_max = Δz * θ_sat * ρ_liq (fully saturated)
+    params = Dict(
+        compiled.T_i => 280.0,  # Above T_f = 273.15
+        compiled.θ_sat => 0.4,
+        compiled.Δz => 0.5,
+        compiled.ψ_sat => -0.1,  # Negative matric potential in m
+        compiled.B_i => 5.0,
+        compiled.ρ_liq => 1000.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    expected = 0.5 * 0.4 * 1000.0  # Δz * θ_sat * ρ_liq = 200 kg/m²
+    @test sol[compiled.w_liq_max][end] ≈ expected rtol = 1.0e-10
+end
+
+@testitem "FreezingPointDepression - Below Freezing" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = FreezingPointDepression()
+    compiled = mtkcompile(sys)
+
+    T_f = 273.15
+    T_i = 268.15  # 5 K below freezing
+    θ_sat = 0.4
+    Δz = 0.5
+    ψ_sat = -0.1  # m (negative in SI)
+    B_i = 5.0
+    ρ_liq = 1000.0
+    L_f = 3.337e5
+    g = 9.80616
+
+    params = Dict(
+        compiled.T_i => T_i,
+        compiled.θ_sat => θ_sat,
+        compiled.Δz => Δz,
+        compiled.ψ_sat => ψ_sat,
+        compiled.B_i => B_i,
+        compiled.ρ_liq => ρ_liq,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Below freezing: w_liq_max < Δz * θ_sat * ρ_liq
+    max_possible = Δz * θ_sat * ρ_liq
+    @test sol[compiled.w_liq_max][end] < max_possible
+    @test sol[compiled.w_liq_max][end] > 0
+end
+
+@testitem "FreezingPointDepression - Colder Means Less Liquid" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = FreezingPointDepression()
+    compiled = mtkcompile(sys)
+
+    base_params = Dict(
+        compiled.θ_sat => 0.4,
+        compiled.Δz => 0.5,
+        compiled.ψ_sat => -0.1,
+        compiled.B_i => 5.0,
+        compiled.ρ_liq => 1000.0,
+    )
+
+    # Slightly below freezing
+    params1 = merge(base_params, Dict(compiled.T_i => 272.15))
+    prob1 = ODEProblem(compiled, params1, (0.0, 1.0))
+    sol1 = solve(prob1)
+
+    # Much below freezing
+    params2 = merge(base_params, Dict(compiled.T_i => 263.15))
+    prob2 = ODEProblem(compiled, params2, (0.0, 1.0))
+    sol2 = solve(prob2)
+
+    # Colder temperature => less liquid water
+    @test sol2[compiled.w_liq_max][end] < sol1[compiled.w_liq_max][end]
+end
+
+# ========================================================================
+# Snow-Soil Blended Heat Capacity Tests
+# ========================================================================
+
+@testitem "SnowSoilBlendedHeatCapacity - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowSoilBlendedHeatCapacity()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "SnowSoilBlendedHeatCapacity - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowSoilBlendedHeatCapacity()
+    compiled = mtkcompile(sys)
+
+    c_soil = 2.0e6
+    W_sno = 5.0
+    Δz = 0.1
+    C_ice = 2117.27
+
+    params = Dict(
+        compiled.c_soil => c_soil,
+        compiled.W_sno => W_sno,
+        compiled.Δz => Δz,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.88: c_i = c_soil + C_ice * W_sno / Δz
+    expected = c_soil + C_ice * W_sno / Δz
+    @test sol[compiled.c_blended][end] ≈ expected rtol = 1.0e-10
+end
+
+@testitem "SnowSoilBlendedHeatCapacity - No Snow" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = SnowSoilBlendedHeatCapacity()
+    compiled = mtkcompile(sys)
+
+    c_soil = 2.0e6
+    params = Dict(
+        compiled.c_soil => c_soil,
+        compiled.W_sno => 0.0,
+        compiled.Δz => 0.1,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # With no snow, blended = soil only
+    @test sol[compiled.c_blended][end] ≈ c_soil rtol = 1.0e-10
+end
+
+# ========================================================================
+# Layer Phase Change Energy Tests
+# ========================================================================
+
+@testitem "LayerPhaseChangeEnergy - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = LayerPhaseChangeEnergy()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "LayerPhaseChangeEnergy - Melting" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = LayerPhaseChangeEnergy()
+    compiled = mtkcompile(sys)
+
+    L_f = 3.337e5
+    w_ice_n = 10.0
+    w_ice_np1 = 8.0  # 2 kg/m² melted
+    Δt = 3600.0
+
+    params = Dict(
+        compiled.w_ice_n => w_ice_n,
+        compiled.w_ice_np1 => w_ice_np1,
+        compiled.Δt => Δt,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.73: E_p = L_f * (w_ice_n - w_ice_np1) / Δt
+    expected = L_f * (w_ice_n - w_ice_np1) / Δt
+    @test sol[compiled.E_p][end] ≈ expected rtol = 1.0e-10
+    @test sol[compiled.E_p][end] > 0  # Positive for melting
+end
+
+@testitem "LayerPhaseChangeEnergy - No Change" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = LayerPhaseChangeEnergy()
+    compiled = mtkcompile(sys)
+
+    params = Dict(
+        compiled.w_ice_n => 10.0,
+        compiled.w_ice_np1 => 10.0,  # No change
+        compiled.Δt => 3600.0,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    @test sol[compiled.E_p][end] ≈ 0.0 atol = 1.0e-12
+end
+
+# ========================================================================
+# Total Phase Change Energy Tests
+# ========================================================================
+
+@testitem "TotalPhaseChangeEnergy - Structural" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = TotalPhaseChangeEnergy()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "TotalPhaseChangeEnergy - Equation Verification" setup = [TempSetup] tags = [:ch4_temps] begin
+    sys = TotalPhaseChangeEnergy()
+    compiled = mtkcompile(sys)
+
+    E_p1S = 50.0
+    E_p_layers = 30.0
+
+    params = Dict(
+        compiled.E_p1S => E_p1S,
+        compiled.E_p_layers => E_p_layers,
+    )
+
+    prob = ODEProblem(compiled, params, (0.0, 1.0))
+    sol = solve(prob)
+
+    # Eq. 4.72: E_p = E_{p,1S} + Σ E_{p,i}
+    @test sol[compiled.E_p_total][end] ≈ E_p1S + E_p_layers rtol = 1.0e-10
+end
