@@ -384,7 +384,7 @@ end
     f_cool = 1 / 0.25
 
     expected_unclamped = 0.3 * (f_heat * 10.0 + f_cool * 5.0) +
-                         0.7 * 1.0 * (f_heat * 8.0 + f_cool * 3.0 + f_heat * 7.0 + f_cool * 2.0)
+        0.7 * 1.0 * (f_heat * 8.0 + f_cool * 3.0 + f_heat * 7.0 + f_cool * 2.0)
     @test sol[compiled.H_wasteheat_unclamped][end] ≈ expected_unclamped rtol = 1.0e-6
     @test sol[compiled.H_wasteheat][end] ≈ min(expected_unclamped, 100.0) rtol = 1.0e-6
     @test sol[compiled.H_aircond][end] ≈ 5.0 + 3.0 + 2.0 rtol = 1.0e-10
@@ -436,7 +436,7 @@ end
     sol = solve(prob)
 
     expected = α * (F_i_n - F_im1_n) + (1 - α) * (F_i_np1 - F_im1_np1) -
-               (c_i * Δz / Δt) * (T_f - T_n)
+        (c_i * Δz / Δt) * (T_f - T_n)
     @test sol[compiled.H_excess][end] ≈ expected rtol = 1.0e-10
 end
 
@@ -466,7 +466,7 @@ end
     sol = solve(prob)
 
     expected = h_n + dh_dT * (T_f - T_n) + α * F_i_n + (1 - α) * F_i_np1 -
-               (c_i * Δz / Δt) * (T_f - T_n)
+        (c_i * Δz / Δt) * (T_f - T_n)
     @test sol[compiled.H_excess][end] ≈ expected rtol = 1.0e-10
 end
 
@@ -905,155 +905,3 @@ end
     @test sol[compiled.c_surf][end] ≈ 2.5e6 rtol = 1.0e-10
 end
 
-# ========================================================================
-# PDE Heat Conduction Tests (MethodOfLines.jl)
-# ========================================================================
-
-@testitem "RoofWallHeatConduction - Steady State" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # Steady-state test: zero surface flux with constant T_bottom
-    # should yield uniform temperature
-    T_bottom = 293.15
-    result = RoofWallHeatConduction(;
-        Δz_total = 0.3, N_layers = 15,
-        λ_val = 1.0, c_val = 2.0e6,
-        h_top = 0.0, T_bottom = T_bottom,
-    )
-
-    sol = solve(result.prob, saveat = 0.1)
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    # At steady state with zero flux at top and T_iB at bottom,
-    # the temperature should be T_bottom everywhere
-    T_final = T_mat[end, :]
-    for Tv in T_final
-        @test Tv ≈ T_bottom rtol = 1.0e-3
-    end
-end
-
-@testitem "RoofWallHeatConduction - Heat Flux Response" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # Apply constant positive heat flux at top
-    T_bottom = 288.15
-    h_top = 100.0  # 100 W/m²
-    result = RoofWallHeatConduction(;
-        Δz_total = 0.3, N_layers = 15,
-        λ_val = 1.0, c_val = 2.0e6,
-        h_top = h_top, T_bottom = T_bottom,
-    )
-
-    sol = solve(result.prob, saveat = 0.1)
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    # Top surface should be warmer than bottom after heating
-    T_final = T_mat[end, :]
-    @test T_final[1] > T_bottom  # top layer heated above bottom temperature
-
-    # Temperature should be monotonically decreasing from top to bottom
-    for i in 1:(length(T_final) - 1)
-        @test T_final[i] ≥ T_final[i + 1] - 1.0e-6
-    end
-end
-
-@testitem "RoofWallHeatConduction - Analytical Steady State with Flux" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # Analytical solution for steady state with constant flux at top:
-    # At steady state: ∂T/∂t = 0, so d²T/dz² = 0 -> T(z) = a*z + b
-    # BC: -λ*dT/dz|_{z=0} = h -> -λ*a = h -> a = -h/λ
-    # BC: T(L) = T_iB -> T_iB = a*L + b -> b = T_iB - a*L = T_iB + h*L/λ
-    # T(z) = T_iB + h*(L-z)/λ
-    # T(0) = T_iB + h*L/λ
-
-    L = 0.3
-    λ = 1.5
-    h = 50.0
-    T_iB = 290.0
-
-    result = RoofWallHeatConduction(;
-        Δz_total = L, N_layers = 30,  # Use finer grid for better accuracy
-        λ_val = λ, c_val = 2.0e6,
-        h_top = h, T_bottom = T_iB,
-    )
-
-    # Solve for longer time to reach steady state
-    tspan = (0.0, 100000.0)
-    prob2 = remake(result.prob; tspan = tspan)
-    sol = solve(prob2)
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    T_final = T_mat[end, :]
-
-    # Surface temperature should match analytical solution
-    T_surface_analytical = T_iB + h * L / λ
-    @test T_final[1] ≈ T_surface_analytical rtol = 0.05
-
-    # Bottom temperature should be T_iB
-    @test T_final[end] ≈ T_iB rtol = 1.0e-3
-end
-
-@testitem "RoadHeatConduction - Steady State Zero Flux" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # With zero flux at both boundaries, temperature should remain at initial value
-    T_init = 288.15
-    result = RoadHeatConduction(;
-        N_layers = 15,
-        λ_val = 1.5, c_val = 2.0e6,
-        h_top = 0.0, T_init_val = T_init,
-    )
-
-    sol = solve(result.prob, saveat = 0.1)
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    # All temperatures should remain at initial value (zero flux everywhere)
-    T_final = T_mat[end, :]
-    for Tv in T_final
-        @test Tv ≈ T_init rtol = 1.0e-3
-    end
-end
-
-@testitem "RoadHeatConduction - Heat Flux Response" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # Apply heat flux at top, zero flux at bottom
-    T_init = 288.15
-    h_top = 100.0
-    result = RoadHeatConduction(;
-        N_layers = 15,
-        λ_val = 1.5, c_val = 2.0e6,
-        h_top = h_top, T_init_val = T_init,
-    )
-
-    sol = solve(result.prob, saveat = 0.1)
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    # With positive heat flux at top, all temperatures should increase
-    T_final = T_mat[end, :]
-    @test T_final[1] > T_init  # top gets heated
-
-    # Surface should be warmest
-    @test T_final[1] ≥ T_final[end] - 1.0e-6
-end
-
-@testitem "RoadHeatConduction - Energy Conservation" setup = [TempSetup] tags = [:ch4_temps] begin
-    using MethodOfLines, DomainSets
-
-    # With zero flux at both boundaries, total energy should be conserved
-    T_init = 288.15
-    result = RoadHeatConduction(;
-        N_layers = 15,
-        λ_val = 1.5, c_val = 2.0e6,
-        h_top = 0.0, T_init_val = T_init,
-    )
-
-    sol = solve(result.prob, saveat = [0.0, 1.0])
-    T_mat = sol[result.T(result.t_pde, result.z_var)]
-
-    # With zero flux, average temperature should be constant
-    T_initial = T_mat[1, :]
-    T_final = T_mat[end, :]
-    @test sum(T_initial) ≈ sum(T_final) rtol = 1.0e-3
-end

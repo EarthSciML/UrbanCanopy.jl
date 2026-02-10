@@ -3,11 +3,7 @@ export SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperti
     SurfaceEnergyFlux, BuildingTemperature, WasteHeatAirConditioning,
     PhaseChangeEnergy, SnowLayerGeometry,
     WasteHeatAllocation, AdjustedLayerThickness, HeatingCoolingFlux,
-    PhaseChangeAdjustment, SnowMeltNoLayers,
-    RoofWallHeatConduction, RoadHeatConduction
-
-using MethodOfLines
-using DomainSets
+    PhaseChangeAdjustment, SnowMeltNoLayers
 
 """
     SnowLayerGeometry(; name=:SnowLayerGeometry)
@@ -91,7 +87,7 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
 
     # Reference constants for empirical formula unit tracking (Eq. 4.79)
     @constants begin
-        λ_s_sand_coeff = 8.80, [description = "Empirical coefficient for sand in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
+        λ_s_sand_coeff = 8.8, [description = "Empirical coefficient for sand in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
         λ_s_clay_coeff = 2.92, [description = "Empirical coefficient for clay in Eq. 4.79 (W m⁻¹ K⁻¹ per %)", unit = u"W/(m*K)"]
         ρ_mineral = 2700.0, [description = "Mineral soil particle density", unit = u"kg/m^3"]
         λ_dry_numerator_coeff = 0.135, [description = "Empirical numerator coefficient in Eq. 4.80 (W m² kg⁻¹ K⁻¹)", unit = u"W*m^2/(kg*K)"]
@@ -132,9 +128,11 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
         # Eq. 4.78: Saturated thermal conductivity
         # For T_i ≥ T_f: λ_sat = λ_s^(1-θ_sat) * λ_liq^θ_sat
         # For T_i < T_f: λ_sat = λ_s^(1-θ_sat) * λ_liq^θ_liq * λ_ice^(θ_sat - θ_liq)
-        λ_sat ~ ifelse(T_i ≥ T_f,
+        λ_sat ~ ifelse(
+            T_i ≥ T_f,
             (λ_s / one_Wm⁻¹K⁻¹)^(1 - θ_sat) * (λ_liq_const / one_Wm⁻¹K⁻¹)^θ_sat * one_Wm⁻¹K⁻¹,
-            (λ_s / one_Wm⁻¹K⁻¹)^(1 - θ_sat) * (λ_liq_const / one_Wm⁻¹K⁻¹)^θ_liq * (λ_ice_const / one_Wm⁻¹K⁻¹)^(θ_sat - θ_liq) * one_Wm⁻¹K⁻¹),
+            (λ_s / one_Wm⁻¹K⁻¹)^(1 - θ_sat) * (λ_liq_const / one_Wm⁻¹K⁻¹)^θ_liq * (λ_ice_const / one_Wm⁻¹K⁻¹)^(θ_sat - θ_liq) * one_Wm⁻¹K⁻¹
+        ),
 
         # Bulk density: ρ_d = 2700 * (1 - θ_sat) (Section 4.3)
         ρ_d ~ ρ_mineral * (1 - θ_sat),
@@ -147,14 +145,18 @@ Thermal conductivity follows Farouki (1981) using the Kersten number method
         S_r ~ (w_liq / (ρ_liq * Δz) + w_ice / (ρ_ice * Δz)) / θ_sat,
 
         # Eq. 4.81: Kersten number (unfrozen: K_e = log(S_r) + 1 ≥ 0; frozen: K_e = S_r)
-        K_e ~ ifelse(T_i ≥ T_f,
+        K_e ~ ifelse(
+            T_i ≥ T_f,
             max(log(max(S_r, 1.0e-10)) + 1.0, 0.0),
-            S_r),
+            S_r
+        ),
 
         # Eq. 4.77: λ = K_e * λ_sat + (1 - K_e) * λ_dry for S_r > 1.0e-7
-        λ_soil ~ ifelse(S_r > 1.0e-7,
+        λ_soil ~ ifelse(
+            S_r > 1.0e-7,
             K_e * λ_sat + (1 - K_e) * λ_dry,
-            λ_dry),
+            λ_dry
+        ),
 
         # Eq. 4.86: c_s = (2.128 * %sand + 2.385 * %clay) / (%sand + %clay) × 10^6
         c_s ~ (c_s_sand_coeff * pct_sand + c_s_clay_coeff * pct_clay) / (pct_sand + pct_clay),
@@ -456,8 +458,10 @@ conditioning heat removal equals the cooling flux (Eq. 4.56).
     eqs = [
         # Eq. 4.55: Total waste heat
         H_wasteheat_unclamped ~ W_roof * (f_heat * F_heat_roof + f_cool * F_cool_roof) +
-                                (1 - W_roof) * H_W * (f_heat * F_heat_sunwall + f_cool * F_cool_sunwall +
-                                                       f_heat * F_heat_shdwall + f_cool * F_cool_shdwall),
+            (1 - W_roof) * H_W * (
+            f_heat * F_heat_sunwall + f_cool * F_cool_sunwall +
+                f_heat * F_heat_shdwall + f_cool * F_cool_shdwall
+        ),
 
         # Clamped to H_wasteheat_max
         H_wasteheat ~ min(H_wasteheat_unclamped, H_wasteheat_max),
@@ -514,7 +518,7 @@ thermal storage are included.
             # H_i = h + (∂h/∂T)(T_f - T_i^n) + α*F_i^n + (1-α)*F_i^{n+1}
             #       - (c_i*Δz_i/Δt)(T_f - T_i^n)
             H_excess ~ h_n + dh_dT * (T_f - T_i_n) + α_CN * F_i_n + (1 - α_CN) * F_i_np1 -
-                        (c_i * Δz_i / Δt) * (T_f - T_i_n),
+                (c_i * Δz_i / Δt) * (T_f - T_i_n),
         ]
     else
         @parameters begin
@@ -527,7 +531,7 @@ thermal storage are included.
             # H_i = α*(F_i^n - F_{i-1}^n) + (1-α)*(F_i^{n+1} - F_{i-1}^{n+1})
             #       - (c_i*Δz_i/Δt)(T_f - T_i^n)
             H_excess ~ α_CN * (F_i_n - F_im1_n) + (1 - α_CN) * (F_i_np1 - F_im1_np1) -
-                        (c_i * Δz_i / Δt) * (T_f - T_i_n),
+                (c_i * Δz_i / Δt) * (T_f - T_i_n),
         ]
     end
 
@@ -709,9 +713,11 @@ residual energy `H_{i*}`, and corrects the temperature.
             # Eq. 4.60 (melting) / Eq. 4.61 (freezing): adjust ice mass
             # For melting (H_m > 0): w_ice^{n+1} = max(w_ice^n - H_m, 0)
             # For freezing (H_m < 0): w_ice^{n+1} = min(w_liq^n + w_ice^n, w_ice^n - H_m)
-            w_ice_np1 ~ ifelse(H_m > zero_kgm2,
+            w_ice_np1 ~ ifelse(
+                H_m > zero_kgm2,
                 max(w_ice_n - H_m, zero_kgm2),
-                min(w_liq_n + w_ice_n, w_ice_n - H_m)),
+                min(w_liq_n + w_ice_n, w_ice_n - H_m)
+            ),
 
             # Eq. 4.63: w_liq^{n+1} = max(w_liq^n + w_ice^n - w_ice^{n+1}, 0)
             w_liq_np1 ~ max(w_liq_n + w_ice_n - w_ice_np1, zero_kgm2),
@@ -726,9 +732,11 @@ residual energy `H_{i*}`, and corrects the temperature.
         eqs = [
             H_m ~ H_i * Δt / L_f,
 
-            w_ice_np1 ~ ifelse(H_m > zero_kgm2,
+            w_ice_np1 ~ ifelse(
+                H_m > zero_kgm2,
                 max(w_ice_n - H_m, zero_kgm2),
-                min(w_liq_n + w_ice_n, w_ice_n - H_m)),
+                min(w_liq_n + w_ice_n, w_ice_n - H_m)
+            ),
 
             w_liq_np1 ~ max(w_liq_n + w_ice_n - w_ice_np1, zero_kgm2),
 
@@ -783,9 +791,11 @@ proportionally.
         W_sno_np1 ~ max(W_sno_n - H_1 * Δt / L_f, zero_kgm2),
 
         # Eq. 4.67: z_sno^{n+1} = (W_sno^{n+1} / W_sno^n) * z_sno^n
-        z_sno_np1 ~ ifelse(W_sno_n > zero_kgm2,
+        z_sno_np1 ~ ifelse(
+            W_sno_n > zero_kgm2,
             (W_sno_np1 / W_sno_n) * z_sno_n,
-            zero_m),
+            zero_m
+        ),
 
         # Eq. 4.68: H_{1*} = H_1 - L_f * (W_sno^n - W_sno^{n+1}) / Δt
         H_residual ~ H_1 - L_f * (W_sno_n - W_sno_np1) / Δt,
@@ -801,142 +811,3 @@ proportionally.
 end
 
 
-"""
-    RoofWallHeatConduction(; name=:RoofWallHeatConduction)
-
-Implements the 1D heat conduction equation (Eq. 4.4) for roof and wall surfaces
-using MethodOfLines.jl for automatic spatial discretization.
-
-The governing PDE is:
-    c ∂T/∂t = ∂/∂z [λ ∂T/∂z]
-
-For roofs and walls, the domain is a uniform grid of total thickness Δz_total
-(Eq. 4.5). The boundary conditions are:
-- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
-- Bottom (z=Δz_total): Dirichlet BC with building temperature T_iB (Eq. 4.37)
-
-The thermal conductivity λ and volumetric heat capacity c are prescribed
-parameters for each layer (from Table 1.3).
-
-**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, pp. 90–91.
-"""
-function RoofWallHeatConduction(; name = :RoofWallHeatConduction,
-    Δz_total = 0.3,
-    N_layers = 15,
-    λ_val = 1.0,
-    c_val = 2.0e6,
-    h_top = 0.0,
-    T_bottom = 293.15)
-
-    @parameters t_pde [unit = u"s"]
-    @parameters z_var [unit = u"m"]
-
-    @variables T(..) [unit = u"K"]
-
-    Dt = Differential(t_pde)
-    Dz = Differential(z_var)
-    Dzz = Differential(z_var)^2
-
-    @parameters begin
-        λ_rw, [description = "Thermal conductivity of roof/wall material", unit = u"W/(m*K)"]
-        c_rw, [description = "Volumetric heat capacity of roof/wall material", unit = u"J/(m^3*K)"]
-        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
-        T_iB, [description = "Internal building temperature at bottom boundary (Eq. 4.37)", unit = u"K"]
-        T_init, [description = "Initial temperature", unit = u"K"]
-    end
-
-    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
-    # For uniform material: c * ∂T/∂t = λ * ∂²T/∂z²
-    eq = [c_rw * Dt(T(t_pde, z_var)) ~ λ_rw * Dzz(T(t_pde, z_var))]  # Eq. 4.4
-
-    bcs = [
-        T(0, z_var) ~ T_init,                                   # Initial condition
-        -λ_rw * Dz(T(t_pde, 0.0)) ~ h_surface,                 # Neumann BC at top (Eq. 4.26)
-        T(t_pde, Δz_total) ~ T_iB,                              # Dirichlet BC at bottom (Eq. 4.37)
-    ]
-
-    domains = [
-        t_pde ∈ Interval(0.0, 1.0),
-        z_var ∈ Interval(0.0, Δz_total),
-    ]
-
-    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom])
-
-    dz = Δz_total / N_layers
-    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
-
-    prob = discretize(pdesys, discretization)
-    return (; prob, T, t_pde, z_var)
-end
-
-
-"""
-    RoadHeatConduction(; name=:RoadHeatConduction)
-
-Implements the 1D heat conduction equation (Eq. 4.4) for pervious and impervious
-road surfaces using MethodOfLines.jl for automatic spatial discretization.
-
-For roads, the domain uses exponential spacing (Eq. 4.8) with the total depth
-determined by the scaling factor f_s = 0.025 m. The boundary conditions are:
-- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
-- Bottom (z=z_max): Zero heat flux (Neumann BC, ∂T/∂z = 0)
-
-The thermal conductivity and heat capacity can vary with depth (e.g., impervious
-layers vs soil layers).
-
-**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, 4.8, pp. 90–92.
-"""
-function RoadHeatConduction(; name = :RoadHeatConduction,
-    N_layers = 15,
-    λ_val = 1.5,
-    c_val = 2.0e6,
-    h_top = 0.0,
-    T_init_val = 288.15)
-
-    f_s = 0.025
-    z_max = f_s * (exp(0.5 * (N_layers - 0.5)) - 1)
-
-    @parameters t_pde [unit = u"s"]
-    @parameters z_var [unit = u"m"]
-
-    @variables T(..) [unit = u"K"]
-
-    Dt = Differential(t_pde)
-    Dz = Differential(z_var)
-    Dzz = Differential(z_var)^2
-
-    @parameters begin
-        λ_rd, [description = "Thermal conductivity of road material", unit = u"W/(m*K)"]
-        c_rd, [description = "Volumetric heat capacity of road material", unit = u"J/(m^3*K)"]
-        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
-        T_init, [description = "Initial temperature", unit = u"K"]
-    end
-
-    @parameters begin
-        zero_flux, [description = "Zero heat flux for bottom BC", unit = u"K/m"]
-    end
-
-    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
-    eq = [c_rd * Dt(T(t_pde, z_var)) ~ λ_rd * Dzz(T(t_pde, z_var))]  # Eq. 4.4
-
-    bcs = [
-        T(0, z_var) ~ T_init,                                 # Initial condition
-        -λ_rd * Dz(T(t_pde, 0.0)) ~ h_surface,               # Neumann BC at top
-        Dz(T(t_pde, z_max)) ~ zero_flux,                      # Zero flux at bottom
-    ]
-
-    domains = [
-        t_pde ∈ Interval(0.0, 1.0),
-        z_var ∈ Interval(0.0, z_max),
-    ]
-
-    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0])
-
-    dz = z_max / N_layers
-    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
-
-    prob = discretize(pdesys, discretization)
-    return (; prob, T, t_pde, z_var)
-end
