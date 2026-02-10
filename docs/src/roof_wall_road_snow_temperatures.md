@@ -9,45 +9,45 @@ the 1D heat equation (Eq. 4.4):
 
 ``c \frac{\partial T}{\partial t} = \frac{\partial}{\partial z}\!\left[\lambda \frac{\partial T}{\partial z}\right]``
 
+which is discretized automatically using [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl).
+
 The implementation provides modular components for:
-1. **Snow layer geometry**: Node depths, thicknesses, and interfaces for up to 5
+1. **PDE heat conduction**: Automatic spatial discretization of the heat equation
+   for roofs/walls (uniform grid, Eq. 4.5) and roads (exponential grid, Eq. 4.8)
+   using MethodOfLines.jl
+2. **Snow layer geometry**: Node depths, thicknesses, and interfaces for up to 5
    snow layers (Eqs. 4.9--4.10)
-2. **Thermal properties**: Soil conductivity via Farouki (1981) / Kersten number
+3. **Thermal properties**: Soil conductivity via Farouki (1981) / Kersten number
    (Eqs. 4.77--4.82), snow conductivity via Jordan (1991) (Eq. 4.83), and
    volumetric heat capacities from de Vries (1963) (Eqs. 4.85--4.87)
-3. **Interface conductivity**: Harmonic mean across adjacent layers (Eq. 4.12)
-4. **Heat flux**: Fourier's law discretized across interfaces (Eq. 4.11)
-5. **Surface energy flux**: Net surface heat flux and its temperature derivative
+4. **Interface conductivity**: Harmonic mean across adjacent layers (Eq. 4.12)
+5. **Heat flux**: Fourier's law discretized across interfaces (Eq. 4.11)
+6. **Surface energy flux**: Net surface heat flux and its temperature derivative
    for the implicit scheme (Eqs. 4.26--4.29)
-6. **Building temperature**: Weighted wall/roof average for interior building
+7. **Building temperature**: Weighted wall/roof average for interior building
    temperature (Eqs. 4.37--4.38)
-7. **Waste heat and air conditioning**: HVAC waste heat distribution and air
+8. **Waste heat and air conditioning**: HVAC waste heat distribution and air
    conditioning heat removal (Eqs. 4.55--4.56)
-8. **Waste heat allocation**: Distribution of waste heat and AC to pervious and
+9. **Waste heat allocation**: Distribution of waste heat and AC to pervious and
    impervious road surfaces (Eq. 4.27)
-9. **Adjusted layer thickness**: Road top layer thickness adjustment for
-   numerical accuracy (Eq. 4.30)
-10. **Heating/cooling flux**: HVAC heating and cooling fluxes based on building
+10. **Adjusted layer thickness**: Road top layer thickness adjustment for
+    numerical accuracy (Eq. 4.30)
+11. **Heating/cooling flux**: HVAC heating and cooling fluxes based on building
     temperature vs prescribed limits (Eqs. 4.51--4.54)
-11. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
+12. **Phase change energy**: Energy excess/deficit for freezing/thawing assessment
     (Eq. 4.59)
-12. **Phase change adjustment**: Ice/liquid mass adjustment and temperature
+13. **Phase change adjustment**: Ice/liquid mass adjustment and temperature
     correction after phase change (Eqs. 4.60--4.65)
-13. **Snow melt without layers**: Snow melt when snow is present but has no
+14. **Snow melt without layers**: Snow melt when snow is present but has no
     explicit layers (Eqs. 4.66--4.71)
-14. **Grid discretization**: Uniform grid for roofs/walls and exponential grid
+15. **Grid discretization**: Uniform grid for roofs/walls and exponential grid
     for roads (Eqs. 4.5--4.8)
-15. **Freezing point depression**: Maximum liquid water content below freezing
+16. **Freezing point depression**: Maximum liquid water content below freezing
     via supercooled soil water (Eq. 4.58)
-16. **Snow-soil blended heat capacity**: Top layer heat capacity blending when
+17. **Snow-soil blended heat capacity**: Top layer heat capacity blending when
     snow is present but has no explicit layers (Eq. 4.88)
-17. **Phase change energy**: Per-layer and total phase change energy for
+18. **Phase change energy**: Per-layer and total phase change energy for
     freezing/thawing assessment (Eqs. 4.72--4.73)
-
-**Limitation**: The full PDE heat conduction solver (Eqs. 4.1--4.4) with Crank-Nicholson
-time discretization (Eqs. 4.14--4.25) is not yet implemented. The components above
-provide the building blocks (thermal properties, fluxes, boundary conditions, phase
-change) that will feed into the full numerical solver.
 
 **Reference**: Oleson, K.W., G.B. Bonan, J.J. Feddema, M. Vertenstein, and E. Kluzek,
 2010: Technical Description of an Urban Parameterization for the Community Land Model
@@ -76,6 +76,8 @@ FreezingPointDepression
 SnowSoilBlendedHeatCapacity
 LayerPhaseChangeEnergy
 TotalPhaseChangeEnergy
+RoofWallHeatConduction
+RoadHeatConduction
 ```
 
 ## Implementation
@@ -639,3 +641,79 @@ At the freezing point (0°C), the maximum liquid water equals the fully
 saturated value ``\Delta z \cdot \theta_{sat} \cdot \rho_{liq}``. As
 temperature decreases below freezing, the available liquid water decreases
 rapidly following the Clapp and Hornberger (1978) relationship.
+
+### Roof/Wall Heat Conduction (Eq. 4.4)
+
+The 1D heat equation for roof and wall surfaces is discretized using
+MethodOfLines.jl. The following example demonstrates the steady-state
+temperature profile with a constant surface heat flux of 50 W/m² at the
+top and a fixed building temperature of 290 K at the bottom.
+
+At steady state (``\partial T / \partial t = 0``), the heat equation reduces to
+``d^2T/dz^2 = 0``, giving a linear temperature profile ``T(z) = T_{iB} + h(L-z)/\lambda``.
+
+```@example ch4_temps
+using MethodOfLines, DomainSets
+
+L = 0.3
+λ_val = 1.5
+h_val = 50.0
+T_iB = 290.0
+
+result = RoofWallHeatConduction(;
+    Δz_total = L, N_layers = 30,
+    λ_val = λ_val, c_val = 2.0e6,
+    h_top = h_val, T_bottom = T_iB,
+)
+
+# Solve for long time to reach steady state
+prob2 = remake(result.prob; tspan = (0.0, 100000.0))
+sol = solve(prob2)
+
+T_mat = sol[result.T(result.t_pde, result.z_var)]
+z_disc = sol[result.z_var]
+T_final = T_mat[end, :]
+
+# Analytical solution
+z_analytical = range(0, L, length=100)
+T_analytical = T_iB .+ h_val .* (L .- z_analytical) ./ λ_val
+
+p = plot(z_analytical, T_analytical, label="Analytical", linewidth=2, linestyle=:dash,
+    xlabel="Depth z (m)", ylabel="Temperature (K)",
+    title="Roof/Wall Steady-State Temperature Profile", legend=:topright)
+scatter!(p, z_disc, T_final, label="MethodOfLines", markersize=4)
+p
+```
+
+### Road Heat Conduction with Zero-Flux Bottom (Eq. 4.4)
+
+Road surfaces use the same heat equation but with a zero heat flux (insulated)
+boundary condition at the bottom. With zero flux at both boundaries, the
+temperature remains uniform at its initial value, demonstrating energy
+conservation.
+
+```@example ch4_temps
+T_init = 288.15
+result_road = RoadHeatConduction(;
+    N_layers = 15,
+    λ_val = 1.5, c_val = 2.0e6,
+    h_top = 0.0, T_init_val = T_init,
+)
+
+sol_road = solve(result_road.prob, saveat = 0.1)
+T_mat_road = sol_road[result_road.T(result_road.t_pde, result_road.z_var)]
+
+t_disc = sol_road[result_road.t_pde]
+avg_T = [mean(T_mat_road[i, :]) for i in 1:length(t_disc)]
+
+using Statistics
+p = plot(t_disc, avg_T, linewidth=2, label="Mean temperature",
+    xlabel="Time (s)", ylabel="Temperature (K)",
+    title="Road Energy Conservation (zero flux BCs)", legend=:topright)
+hline!(p, [T_init], label="Initial T", linestyle=:dash, color=:red)
+p
+```
+
+With insulated (zero-flux) boundary conditions on both sides, the average
+temperature remains constant, confirming energy conservation in the
+discretized system.

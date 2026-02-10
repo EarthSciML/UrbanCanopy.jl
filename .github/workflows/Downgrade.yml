@@ -39,5 +39,13 @@ jobs:
       - uses: julia-actions/cache@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Install custom MethodOfLines.jl fork"
+        run: |
+          julia -e '
+            using Pkg
+            Pkg.activate(".")
+            Pkg.develop(url="https://github.com/ctessum-claude/MethodOfLines.jl.git")
+          '
+          cd ~/.julia/dev/MethodOfLines && git checkout fix-units-discretization
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

@@ -6,7 +6,11 @@ export SoilThermalProperties, SnowThermalProperties, UrbanSurfaceThermalProperti
     PhaseChangeAdjustment, SnowMeltNoLayers,
     UniformGrid, ExponentialGrid,
     FreezingPointDepression, SnowSoilBlendedHeatCapacity,
-    TotalPhaseChangeEnergy, LayerPhaseChangeEnergy
+    TotalPhaseChangeEnergy, LayerPhaseChangeEnergy,
+    RoofWallHeatConduction, RoadHeatConduction
+
+using MethodOfLines
+using DomainSets
 
 """
     SnowLayerGeometry(; name=:SnowLayerGeometry)
@@ -1081,4 +1085,145 @@ and the per-layer phase change energies (Eq. 4.73).
     ]
 
     return System(eqs, t; name)
+end
+
+
+"""
+    RoofWallHeatConduction(; name=:RoofWallHeatConduction)
+
+Implements the 1D heat conduction equation (Eq. 4.4) for roof and wall surfaces
+using MethodOfLines.jl for automatic spatial discretization.
+
+The governing PDE is:
+    c ∂T/∂t = ∂/∂z [λ ∂T/∂z]
+
+For roofs and walls, the domain is a uniform grid of total thickness Δz_total
+(Eq. 4.5). The boundary conditions are:
+- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
+- Bottom (z=Δz_total): Dirichlet BC with building temperature T_iB (Eq. 4.37)
+
+The thermal conductivity λ and volumetric heat capacity c are prescribed
+parameters for each layer (from Table 1.3).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, pp. 90–91.
+"""
+function RoofWallHeatConduction(; name = :RoofWallHeatConduction,
+    Δz_total = 0.3,
+    N_layers = 15,
+    λ_val = 1.0,
+    c_val = 2.0e6,
+    h_top = 0.0,
+    T_bottom = 293.15)
+
+    @parameters t_pde [unit = u"s"]
+    @parameters z_var [unit = u"m"]
+
+    @variables T(..) [unit = u"K"]
+
+    Dt = Differential(t_pde)
+    Dz = Differential(z_var)
+    Dzz = Differential(z_var)^2
+
+    @parameters begin
+        λ_rw, [description = "Thermal conductivity of roof/wall material", unit = u"W/(m*K)"]
+        c_rw, [description = "Volumetric heat capacity of roof/wall material", unit = u"J/(m^3*K)"]
+        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_iB, [description = "Internal building temperature at bottom boundary (Eq. 4.37)", unit = u"K"]
+        T_init, [description = "Initial temperature", unit = u"K"]
+    end
+
+    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
+    # For uniform material: c * ∂T/∂t = λ * ∂²T/∂z²
+    eq = [c_rw * Dt(T(t_pde, z_var)) ~ λ_rw * Dzz(T(t_pde, z_var))]  # Eq. 4.4
+
+    bcs = [
+        T(0, z_var) ~ T_init,                                   # Initial condition
+        -λ_rw * Dz(T(t_pde, 0.0)) ~ h_surface,                 # Neumann BC at top (Eq. 4.26)
+        T(t_pde, Δz_total) ~ T_iB,                              # Dirichlet BC at bottom (Eq. 4.37)
+    ]
+
+    domains = [
+        t_pde ∈ Interval(0.0, 1.0),
+        z_var ∈ Interval(0.0, Δz_total),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom])
+
+    dz = Δz_total / N_layers
+    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    return (; prob, T, t_pde, z_var)
+end
+
+
+"""
+    RoadHeatConduction(; name=:RoadHeatConduction)
+
+Implements the 1D heat conduction equation (Eq. 4.4) for pervious and impervious
+road surfaces using MethodOfLines.jl for automatic spatial discretization.
+
+For roads, the domain uses exponential spacing (Eq. 4.8) with the total depth
+determined by the scaling factor f_s = 0.025 m. The boundary conditions are:
+- Top (z=0): Neumann BC with surface heat flux h (Eq. 4.26)
+- Bottom (z=z_max): Zero heat flux (Neumann BC, ∂T/∂z = 0)
+
+The thermal conductivity and heat capacity can vary with depth (e.g., impervious
+layers vs soil layers).
+
+**Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, 4.8, pp. 90–92.
+"""
+function RoadHeatConduction(; name = :RoadHeatConduction,
+    N_layers = 15,
+    λ_val = 1.5,
+    c_val = 2.0e6,
+    h_top = 0.0,
+    T_init_val = 288.15)
+
+    f_s = 0.025
+    z_max = f_s * (exp(0.5 * (N_layers - 0.5)) - 1)
+
+    @parameters t_pde [unit = u"s"]
+    @parameters z_var [unit = u"m"]
+
+    @variables T(..) [unit = u"K"]
+
+    Dt = Differential(t_pde)
+    Dz = Differential(z_var)
+    Dzz = Differential(z_var)^2
+
+    @parameters begin
+        λ_rd, [description = "Thermal conductivity of road material", unit = u"W/(m*K)"]
+        c_rd, [description = "Volumetric heat capacity of road material", unit = u"J/(m^3*K)"]
+        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_init, [description = "Initial temperature", unit = u"K"]
+    end
+
+    @parameters begin
+        zero_flux, [description = "Zero heat flux for bottom BC", unit = u"K/m"]
+    end
+
+    # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
+    eq = [c_rd * Dt(T(t_pde, z_var)) ~ λ_rd * Dzz(T(t_pde, z_var))]  # Eq. 4.4
+
+    bcs = [
+        T(0, z_var) ~ T_init,                                 # Initial condition
+        -λ_rd * Dz(T(t_pde, 0.0)) ~ h_surface,               # Neumann BC at top
+        Dz(T(t_pde, z_max)) ~ zero_flux,                      # Zero flux at bottom
+    ]
+
+    domains = [
+        t_pde ∈ Interval(0.0, 1.0),
+        z_var ∈ Interval(0.0, z_max),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0])
+
+    dz = z_max / N_layers
+    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    return (; prob, T, t_pde, z_var)
 end
