@@ -88,6 +88,7 @@ RoadHeatConduction
 
 ```@example ch4_temps
 using DataFrames, ModelingToolkit, Symbolics, DynamicQuantities
+using Statistics
 using UrbanCanopy
 
 sys_soil = SoilThermalProperties()
