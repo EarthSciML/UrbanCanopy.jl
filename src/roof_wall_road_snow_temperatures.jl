@@ -1107,13 +1107,15 @@ parameters for each layer (from Table 1.3).
 
 **Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, pp. 90–91.
 """
-function RoofWallHeatConduction(; name = :RoofWallHeatConduction,
-    Δz_total = 0.3,
-    N_layers = 15,
-    λ_val = 1.0,
-    c_val = 2.0e6,
-    h_top = 0.0,
-    T_bottom = 293.15)
+function RoofWallHeatConduction(;
+        name = :RoofWallHeatConduction,
+        Δz_total = 0.3,
+        N_layers = 15,
+        λ_val = 1.0,
+        c_val = 2.0e6,
+        h_top = 0.0,
+        T_bottom = 293.15
+    )
 
     @parameters t_pde [unit = u"s"]
     @parameters z_var [unit = u"m"]
@@ -1147,8 +1149,10 @@ function RoofWallHeatConduction(; name = :RoofWallHeatConduction,
         z_var ∈ Interval(0.0, Δz_total),
     ]
 
-    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom])
+    @named pdesys = PDESystem(
+        eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom]
+    )
 
     dz = Δz_total / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
@@ -1174,12 +1178,14 @@ layers vs soil layers).
 
 **Reference**: Oleson et al. (2010), Chapter 4, Eqs. 4.1–4.4, 4.8, pp. 90–92.
 """
-function RoadHeatConduction(; name = :RoadHeatConduction,
-    N_layers = 15,
-    λ_val = 1.5,
-    c_val = 2.0e6,
-    h_top = 0.0,
-    T_init_val = 288.15)
+function RoadHeatConduction(;
+        name = :RoadHeatConduction,
+        N_layers = 15,
+        λ_val = 1.5,
+        c_val = 2.0e6,
+        h_top = 0.0,
+        T_init_val = 288.15
+    )
 
     f_s = 0.025
     z_max = f_s * (exp(0.5 * (N_layers - 0.5)) - 1)
@@ -1218,8 +1224,10 @@ function RoadHeatConduction(; name = :RoadHeatConduction,
         z_var ∈ Interval(0.0, z_max),
     ]
 
-    @named pdesys = PDESystem(eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0])
+    @named pdesys = PDESystem(
+        eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
+        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0]
+    )
 
     dz = z_max / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)

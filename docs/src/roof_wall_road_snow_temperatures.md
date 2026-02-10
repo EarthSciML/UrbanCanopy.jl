@@ -308,9 +308,9 @@ eqs = equations(sys_lpe)
 ```
 
 ```@example ch4_temps
-sys_tpe = TotalPhaseChangeEnergy()
+sys_tpce = TotalPhaseChangeEnergy()
 
-vars = unknowns(sys_tpe)
+vars = unknowns(sys_tpce)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in vars],
     :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
@@ -319,7 +319,7 @@ DataFrame(
 ```
 
 ```@example ch4_temps
-eqs = equations(sys_tpe)
+eqs = equations(sys_tpce)
 ```
 
 ## Analysis

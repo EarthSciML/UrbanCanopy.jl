@@ -1293,7 +1293,7 @@ end
     # the temperature should be T_bottom everywhere
     T_final = T_mat[end, :]
     for Tv in T_final
-        @test Tv ≈ T_bottom rtol = 1e-3
+        @test Tv ≈ T_bottom rtol = 1.0e-3
     end
 end
 
@@ -1318,7 +1318,7 @@ end
 
     # Temperature should be monotonically decreasing from top to bottom
     for i in 1:(length(T_final) - 1)
-        @test T_final[i] ≥ T_final[i + 1] - 1e-6
+        @test T_final[i] ≥ T_final[i + 1] - 1.0e-6
     end
 end
 
@@ -1356,7 +1356,7 @@ end
     @test T_final[1] ≈ T_surface_analytical rtol = 0.05
 
     # Bottom temperature should be T_iB
-    @test T_final[end] ≈ T_iB rtol = 1e-3
+    @test T_final[end] ≈ T_iB rtol = 1.0e-3
 end
 
 @testitem "RoadHeatConduction - Steady State Zero Flux" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -1376,7 +1376,7 @@ end
     # All temperatures should remain at initial value (zero flux everywhere)
     T_final = T_mat[end, :]
     for Tv in T_final
-        @test Tv ≈ T_init rtol = 1e-3
+        @test Tv ≈ T_init rtol = 1.0e-3
     end
 end
 
@@ -1400,7 +1400,7 @@ end
     @test T_final[1] > T_init  # top gets heated
 
     # Surface should be warmest
-    @test T_final[1] ≥ T_final[end] - 1e-6
+    @test T_final[1] ≥ T_final[end] - 1.0e-6
 end
 
 @testitem "RoadHeatConduction - Energy Conservation" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -1420,5 +1420,5 @@ end
     # With zero flux, average temperature should be constant
     T_initial = T_mat[1, :]
     T_final = T_mat[end, :]
-    @test sum(T_initial) ≈ sum(T_final) rtol = 1e-3
+    @test sum(T_initial) ≈ sum(T_final) rtol = 1.0e-3
 end
