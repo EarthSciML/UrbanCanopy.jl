@@ -1,7 +1,7 @@
 export SnowDensity, SnowIceContent, SnowWaterContent, SnowCompaction,
     SnowLayerCombination, SoilHydraulicProperties, SurfaceRunoffInfiltration,
-    SoilWaterFlux, SoilWaterEquilibrium, GroundwaterDrainage, WaterTableDepth,
-    AquiferWaterBalance, SnowCappingRunoff, SurfaceLayerUpdate,
+    SoilWaterFlux, SoilWaterEquilibrium, RichardsEquation, GroundwaterDrainage,
+    WaterTableDepth, AquiferWaterBalance, SnowCappingRunoff, SurfaceLayerUpdate,
     PerviousRoadWaterBalance, ImperviousWaterBalance
 
 """
@@ -530,6 +530,138 @@ All lengths in SI units (m).
         # Eq. 5.106: Equilibrium matric potential
         ψ_E ~ max(ψ_sat * (max(θ_E, 0.01 * θ_sat) / θ_sat)^(-B) * one_m / one_m, ψ_min),
     ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    RichardsEquation(; name=:RichardsEquation, N=10)
+
+Implements Richards' equation (Eq. 5.59) for vertical soil water movement,
+discretized into `N` layers using the method of lines.
+
+The equation `∂θ/∂t = -∂q/∂z - Q` is semi-discretized into an N-layer ODE system
+where each layer has a volumetric water content `θ_liq[i]` as a state variable.
+Soil hydraulic properties follow Clapp and Hornberger (1978) as parameterized in
+Eqs. 5.69–5.74. Soil water flux between layers follows the modified Darcy's law
+of Zeng and Decker (2009) (Eq. 5.88). Equilibrium moisture profiles follow
+Eqs. 5.101 and 5.106.
+
+Flux sign convention: positive upward (matching `SoilWaterFlux`).
+- Top boundary: `q_0 = -q_infl` (infiltration is downward).
+- Bottom boundary: `q_N = -q_bottom` (drainage is downward).
+
+Frozen soil effects are not included (f_frz = 0).
+
+**Reference**: Oleson et al. (2010), Chapter 5, Eqs. 5.59, 5.69–5.74, 5.76,
+5.87–5.88, 5.98–5.106, pp. 127–138.
+"""
+@component function RichardsEquation(; name = :RichardsEquation, N = 10)
+
+    @constants begin
+        # Paper gives k_coeff = 0.0070556 mm/s; multiply by 0.001 to get m/s
+        k_coeff = 0.0070556e-3, [description = "Coefficient for saturated hydraulic conductivity (Eq. 5.70), converted from mm/s to m/s", unit = u"m/s"]
+        # Paper gives ψ_coeff = -10.0 mm; multiply by 0.001 to get m
+        ψ_coeff = -10.0e-3, [description = "Coefficient for saturated matric potential (Eq. 5.74), converted from mm to m", unit = u"m"]
+        ψ_min = -1.0e5, [description = "Minimum soil matric potential (converted from -1e8 mm to m)", unit = u"m"]
+        one_m = 1.0, [description = "Unit length for nondimensionalization", unit = u"m"]
+        one_mps = 1.0, [description = "Unit hydraulic conductivity for nondimensionalization", unit = u"m/s"]
+    end
+
+    @parameters begin
+        pct_sand, [description = "Percent sand content (dimensionless)"]
+        pct_clay, [description = "Percent clay content (dimensionless)"]
+        z_v, [description = "Water table depth", unit = u"m"]
+        q_infl, [description = "Infiltration rate at surface (positive downward)", unit = u"m/s"]
+        q_bottom, [description = "Bottom boundary flux (positive downward, 0 for zero-flux)", unit = u"m/s"]
+        e[1:N], [description = "Evapotranspiration sink per layer", unit = u"m/s"]
+        z_node[1:N], [description = "Node depth of each layer", unit = u"m"]
+        Δz_layer[1:N], [description = "Layer thickness", unit = u"m"]
+        z_interface[1:(N + 1)], [description = "Interface depth (N+1 interfaces for N layers)", unit = u"m"]
+    end
+
+    @variables begin
+        # State variables (N ODEs)
+        θ_liq[1:N](t), [description = "Volumetric liquid water content per layer", unit = u"m^3/m^3"]
+        # Soil properties from texture (4 algebraic)
+        k_sat(t), [description = "Saturated hydraulic conductivity (Eq. 5.70)", unit = u"m/s"]
+        θ_sat(t), [description = "Porosity (Eq. 5.71)", unit = u"m^3/m^3"]
+        B_CH(t), [description = "Clapp-Hornberger exponent (Eq. 5.72) (dimensionless)"]
+        ψ_sat(t), [description = "Saturated matric potential (Eq. 5.74)", unit = u"m"]
+        # Per-layer algebraic variables
+        ψ[1:N](t), [description = "Matric potential per layer (Eq. 5.73)", unit = u"m"]
+        θ_E[1:N](t), [description = "Equilibrium volumetric water content per layer (Eq. 5.101)", unit = u"m^3/m^3"]
+        ψ_E[1:N](t), [description = "Equilibrium matric potential per layer (Eq. 5.106)", unit = u"m"]
+        # Interface variables
+        k_interface[1:(N - 1)](t), [description = "Hydraulic conductivity at internal interfaces (Eq. 5.69)", unit = u"m/s"]
+        q[1:(N - 1)](t), [description = "Water flux at internal interfaces (Eq. 5.88, positive upward)", unit = u"m/s"]
+    end
+
+    eqs = Equation[]
+
+    # ===== Soil properties from texture (4 equations) =====
+    # Eq. 5.70: Saturated hydraulic conductivity
+    push!(eqs, k_sat ~ k_coeff * 10.0^(-0.884 + 0.0153 * pct_sand))
+    # Eq. 5.71: Porosity
+    push!(eqs, θ_sat ~ 0.489 - 0.00126 * pct_sand)
+    # Eq. 5.72: Clapp-Hornberger exponent
+    push!(eqs, B_CH ~ 2.91 + 0.159 * pct_clay)
+    # Eq. 5.74: Saturated matric potential
+    push!(eqs, ψ_sat ~ ψ_coeff * 10.0^(1.88 - 0.0131 * pct_sand))
+
+    # ===== Per-layer matric potential (N equations) =====
+    for i in 1:N
+        # Eq. 5.73: ψ_i = ψ_sat * (θ_i/θ_sat)^{-B}, clamped to [ψ_min, 0]
+        push!(eqs, ψ[i] ~ max(ψ_sat * (max(θ_liq[i], 0.01 * θ_sat) / θ_sat)^(-B_CH) * one_m / one_m, ψ_min))
+    end
+
+    # ===== Per-layer equilibrium θ_E (N equations) =====
+    for i in 1:N
+        # Eq. 5.101: Layer-averaged equilibrium water content
+        push!(eqs, θ_E[i] ~ max(0.0 * θ_sat, min(θ_sat,
+            (θ_sat * ψ_sat) / ((z_interface[i + 1] - z_interface[i]) * (1.0 - 1.0 / B_CH)) *
+            (((ψ_sat - z_v + z_interface[i + 1]) / ψ_sat)^(1.0 - 1.0 / B_CH) -
+             ((ψ_sat - z_v + z_interface[i]) / ψ_sat)^(1.0 - 1.0 / B_CH))
+        )))
+    end
+
+    # ===== Per-layer equilibrium ψ_E (N equations) =====
+    for i in 1:N
+        # Eq. 5.106: Equilibrium matric potential
+        push!(eqs, ψ_E[i] ~ max(ψ_sat * (max(θ_E[i], 0.01 * θ_sat) / θ_sat)^(-B_CH) * one_m / one_m, ψ_min))
+    end
+
+    # ===== Interface hydraulic conductivity (N-1 equations) =====
+    for j in 1:(N - 1)
+        # Eq. 5.69: k = k_sat * (θ/θ_sat)^{2B+3}, averaged at interface
+        S_j = max(θ_liq[j], 0.01 * θ_sat) / θ_sat
+        S_jp1 = max(θ_liq[j + 1], 0.01 * θ_sat) / θ_sat
+        S_avg = 0.5 * (S_j + S_jp1)
+        push!(eqs, k_interface[j] ~ k_sat * S_avg^(2.0 * B_CH + 3.0) * one_mps / one_mps)
+    end
+
+    # ===== Interface flux (N-1 equations) =====
+    for j in 1:(N - 1)
+        # Eq. 5.88: Soil water flux (positive upward)
+        push!(eqs, q[j] ~ -k_interface[j] * ((ψ[j] - ψ[j + 1]) + (ψ_E[j + 1] - ψ_E[j])) / (z_node[j + 1] - z_node[j]))
+    end
+
+    # ===== Conservation ODEs (N equations) =====
+    # Eq. 5.76: Δz[i] * dθ/dt = q_below - q_above - e[i]
+    # With BCs: q_above for layer 1 = -q_infl, q_below for layer N = -q_bottom
+    for i in 1:N
+        if i == 1
+            # Top layer: upper boundary is surface infiltration
+            push!(eqs, D(θ_liq[i]) ~ (q[1] + q_infl - e[i]) / Δz_layer[i])
+        elseif i == N
+            # Bottom layer: lower boundary is bottom flux
+            push!(eqs, D(θ_liq[i]) ~ (-q_bottom - q[N - 1] - e[i]) / Δz_layer[i])
+        else
+            # Interior layer
+            push!(eqs, D(θ_liq[i]) ~ (q[i] - q[i - 1] - e[i]) / Δz_layer[i])
+        end
+    end
 
     return System(eqs, t; name)
 end

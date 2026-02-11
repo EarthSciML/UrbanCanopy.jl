@@ -36,6 +36,7 @@ SoilHydraulicProperties
 SurfaceRunoffInfiltration
 SoilWaterFlux
 SoilWaterEquilibrium
+RichardsEquation
 GroundwaterDrainage
 WaterTableDepth
 AquiferWaterBalance
@@ -47,7 +48,7 @@ ImperviousWaterBalance
 
 ## Implementation
 
-The hydrology module implements the equations from Chapter 5 as 16 modular
+The hydrology module implements the equations from Chapter 5 as 17 modular
 ModelingToolkit components. Each component can be used independently or
 composed into larger systems.
 
@@ -156,6 +157,32 @@ DataFrame(
 
 ```@example hydrology
 equations(sys_wt)
+```
+
+### Richards' Equation (Multi-Layer Soil Water PDE)
+
+```@example hydrology
+sys_re = RichardsEquation(; N = 5)
+
+vars = unknowns(sys_re)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_re)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_re)
 ```
 
 ## Analysis
@@ -386,3 +413,105 @@ The combined temperature lies between the two layer temperatures, weighted by
 the thermal mass (ice and liquid heat capacities) of each layer. Because layer 2
 has more mass (5 kg/m² ice + 1 kg/m² liquid vs 3 + 0.5 for layer 1), the
 combined temperature is closer to ``T_2`` than ``T_1``.
+
+### Richards' Equation - Wetting Front Propagation (Eq. 5.59)
+
+Infiltration-driven wetting front propagating downward through a 10-layer soil
+column. The initial condition is dry soil (``\theta = 0.1 \theta_{sat}``), with
+constant infiltration applied at the surface (``q_{infl} = 10^{-6}`` m/s).
+
+```@example hydrology
+N = 10
+sys_re = RichardsEquation(; N = N)
+compiled_re = mtkcompile(sys_re)
+
+pct_sand = 50.0
+pct_clay = 20.0
+Δz = 0.2
+total_depth = N * Δz
+θ_sat_val = 0.489 - 0.00126 * pct_sand
+
+z_nodes = [(i - 0.5) * Δz for i in 1:N]
+z_ifaces = [i * Δz for i in 0:N]
+
+# Build string-based lookups for scalarized unknowns/observed
+unk_re = Dict(string(u) => u for u in unknowns(compiled_re))
+obs_re = Dict(string(o.lhs) => o.lhs for o in observed(compiled_re))
+
+# Array parameters are passed as whole arrays; scalar params individually
+pmap = [
+    compiled_re.pct_sand => pct_sand,
+    compiled_re.pct_clay => pct_clay,
+    compiled_re.z_v => total_depth,
+    compiled_re.q_infl => 1e-6,
+    compiled_re.q_bottom => 0.0,
+    compiled_re.e => zeros(N),
+    compiled_re.z_node => z_nodes,
+    compiled_re.Δz_layer => fill(Δz, N),
+    compiled_re.z_interface => z_ifaces,
+]
+
+u0 = [unk_re["θ_liq[$i](t)"] => 0.1 * θ_sat_val for i in 1:N]
+prob_re = ODEProblem(compiled_re, u0, (0.0, 50000.0), pmap)
+sol_re = solve(prob_re, saveat=10000.0)
+
+p = plot(xlabel="Volumetric Water Content (m³/m³)", ylabel="Depth (m)",
+    title="Wetting Front Propagation (Eq. 5.59)",
+    yflip=true, legend=:bottomleft)
+for (j, t_val) in enumerate(sol_re.t)
+    θ_profile = [sol_re[unk_re["θ_liq[$i](t)"]][j] for i in 1:N]
+    plot!(p, θ_profile, z_nodes, linewidth=2,
+        label="t = $(Int(t_val)) s", marker=:circle, markersize=3)
+end
+vline!(p, [θ_sat_val], linestyle=:dash, color=:gray, label="θ_sat")
+p
+```
+
+The wetting front propagates downward over time as infiltration fills the top
+layers first, then redistributes water through Darcy's law. The front moves
+faster through sandy soils (higher ``k_{sat}``) and slows as the soil approaches
+saturation.
+
+### Richards' Equation - Approach to Equilibrium (Eq. 5.101)
+
+Starting from a uniform wet initial condition (``\theta = 0.8\,\theta_{sat}``),
+the soil column relaxes toward its hydrostatic equilibrium profile
+(``\theta_E``) with no external forcing.
+
+```@example hydrology
+pmap_eq = [
+    compiled_re.pct_sand => pct_sand,
+    compiled_re.pct_clay => pct_clay,
+    compiled_re.z_v => total_depth,
+    compiled_re.q_infl => 0.0,
+    compiled_re.q_bottom => 0.0,
+    compiled_re.e => zeros(N),
+    compiled_re.z_node => z_nodes,
+    compiled_re.Δz_layer => fill(Δz, N),
+    compiled_re.z_interface => z_ifaces,
+]
+
+u0_wet = [unk_re["θ_liq[$i](t)"] => 0.8 * θ_sat_val for i in 1:N]
+prob_eq = ODEProblem(compiled_re, u0_wet, (0.0, 200000.0), pmap_eq)
+sol_eq = solve(prob_eq, saveat=40000.0)
+
+# Get equilibrium profile
+θ_E_profile = [sol_eq[obs_re["θ_E[$i](t)"]][1] for i in 1:N]
+
+p = plot(xlabel="Volumetric Water Content (m³/m³)", ylabel="Depth (m)",
+    title="Approach to Equilibrium (Eq. 5.101)",
+    yflip=true, legend=:bottomleft)
+for (j, t_val) in enumerate(sol_eq.t)
+    θ_profile = [sol_eq[unk_re["θ_liq[$i](t)"]][j] for i in 1:N]
+    plot!(p, θ_profile, z_nodes, linewidth=2,
+        label="t = $(Int(t_val)) s", marker=:circle, markersize=3)
+end
+plot!(p, θ_E_profile, z_nodes, linewidth=3, linestyle=:dash, color=:black,
+    label="θ_E (equilibrium)", marker=:diamond, markersize=4)
+p
+```
+
+Starting from a uniform profile, the soil redistributes water under gravity
+and capillary forces until it reaches the equilibrium profile ``\theta_E``
+determined by the water table depth and soil properties. Deeper layers retain
+more moisture in equilibrium due to their proximity to the water table.

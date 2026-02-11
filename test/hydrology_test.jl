@@ -961,3 +961,214 @@ end
         @test s[compiled.ψ_sat][end] < 0.0
     end
 end
+
+# ============================================================================
+# RichardsEquation Tests
+# ============================================================================
+
+@testitem "RichardsEquation - Structural Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    N = 5
+    sys = RichardsEquation(; N = N)
+
+    # 6N + 2 equations: 4 soil props + N ψ + N θ_E + N ψ_E + (N-1) k_interface + (N-1) q + N ODEs
+    expected_eqs = 6 * N + 2
+    @test length(equations(sys)) == expected_eqs
+    @test length(unknowns(sys)) == expected_eqs
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "RichardsEquation - Saturated Limit" setup = [HydrologySetup] tags = [:hydrology] begin
+    N = 5
+    sys = RichardsEquation(; N = N)
+    compiled = mtkcompile(sys)
+
+    pct_sand_val = 50.0
+    pct_clay_val = 20.0
+    Δz = 0.4
+    total_depth = N * Δz
+
+    # Expected soil properties
+    k_sat_exp = 0.0070556e-3 * 10.0^(-0.884 + 0.0153 * pct_sand_val)
+    θ_sat_exp = 0.489 - 0.00126 * pct_sand_val
+    ψ_sat_exp = -10.0e-3 * 10.0^(1.88 - 0.0131 * pct_sand_val)
+
+    # Uniform grid
+    z_nodes = [(i - 0.5) * Δz for i in 1:N]
+    z_ifaces = Float64[i * Δz for i in 0:N]
+
+    # Build lookup dictionaries for scalarized variable access
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+    unk = Dict(string(u) => u for u in unknowns(compiled))
+
+    # Parameters: array params stay as arrays, scalar params stay scalar
+    pmap = [
+        compiled.pct_sand => pct_sand_val,
+        compiled.pct_clay => pct_clay_val,
+        compiled.z_v => total_depth,
+        compiled.q_infl => 0.0,
+        compiled.q_bottom => 0.0,
+        compiled.e => zeros(N),
+        compiled.z_node => z_nodes,
+        compiled.Δz_layer => fill(Δz, N),
+        compiled.z_interface => z_ifaces,
+    ]
+
+    # Initialize at saturation using unknowns lookup
+    u0 = [unk["θ_liq[$i](t)"] => θ_sat_exp for i in 1:N]
+
+    prob = ODEProblem(compiled, u0, (0.0, 1.0), pmap)
+    sol = solve(prob)
+
+    # At saturation, ψ should equal ψ_sat and k_sat should match
+    @test sol[obs["ψ_sat(t)"]][end] ≈ ψ_sat_exp rtol = 1e-4
+    @test sol[obs["k_sat(t)"]][end] ≈ k_sat_exp rtol = 1e-4
+    @test sol[obs["θ_sat(t)"]][end] ≈ θ_sat_exp rtol = 1e-6
+    for i in 1:N
+        @test sol[obs["ψ[$i](t)"]][end] ≈ ψ_sat_exp rtol = 1e-3
+    end
+end
+
+@testitem "RichardsEquation - Mass Conservation" setup = [HydrologySetup] tags = [:hydrology] begin
+    N = 5
+    sys = RichardsEquation(; N = N)
+    compiled = mtkcompile(sys)
+
+    pct_sand_val = 50.0
+    pct_clay_val = 20.0
+    Δz = 0.4
+    total_depth = N * Δz
+    θ_sat_exp = 0.489 - 0.00126 * pct_sand_val
+
+    z_nodes = [(i - 0.5) * Δz for i in 1:N]
+    z_ifaces = Float64[i * Δz for i in 0:N]
+
+    q_infl_val = 1e-6  # m/s infiltration
+
+    unk = Dict(string(u) => u for u in unknowns(compiled))
+
+    pmap = [
+        compiled.pct_sand => pct_sand_val,
+        compiled.pct_clay => pct_clay_val,
+        compiled.z_v => total_depth,
+        compiled.q_infl => q_infl_val,
+        compiled.q_bottom => 0.0,
+        compiled.e => zeros(N),
+        compiled.z_node => z_nodes,
+        compiled.Δz_layer => fill(Δz, N),
+        compiled.z_interface => z_ifaces,
+    ]
+
+    # Start at moderate water content
+    θ_init = 0.2
+    u0 = [unk["θ_liq[$i](t)"] => θ_init for i in 1:N]
+
+    T_end = 100.0
+    prob = ODEProblem(compiled, u0, (0.0, T_end), pmap)
+    sol = solve(prob)
+
+    # Total water at start and end
+    W_start = sum(sol[unk["θ_liq[$i](t)"]][1] * Δz for i in 1:N)
+    W_end = sum(sol[unk["θ_liq[$i](t)"]][end] * Δz for i in 1:N)
+
+    # Change in total water should equal q_infl * T_end
+    ΔW_expected = q_infl_val * T_end
+    @test (W_end - W_start) ≈ ΔW_expected rtol = 1e-3
+end
+
+@testitem "RichardsEquation - Gravity Drainage" setup = [HydrologySetup] tags = [:hydrology] begin
+    N = 5
+    sys = RichardsEquation(; N = N)
+    compiled = mtkcompile(sys)
+
+    pct_sand_val = 50.0
+    pct_clay_val = 20.0
+    Δz = 0.4
+    total_depth = N * Δz
+    θ_sat_exp = 0.489 - 0.00126 * pct_sand_val
+
+    z_nodes = [(i - 0.5) * Δz for i in 1:N]
+    z_ifaces = Float64[i * Δz for i in 0:N]
+
+    unk = Dict(string(u) => u for u in unknowns(compiled))
+
+    pmap = [
+        compiled.pct_sand => pct_sand_val,
+        compiled.pct_clay => pct_clay_val,
+        compiled.z_v => total_depth,
+        compiled.q_infl => 0.0,
+        compiled.q_bottom => 0.0,
+        compiled.e => zeros(N),
+        compiled.z_node => z_nodes,
+        compiled.Δz_layer => fill(Δz, N),
+        compiled.z_interface => z_ifaces,
+    ]
+
+    # Wet top, dry bottom
+    u0 = Pair[]
+    for i in 1:N
+        θ_val = i <= 2 ? 0.8 * θ_sat_exp : 0.1 * θ_sat_exp
+        push!(u0, unk["θ_liq[$i](t)"] => θ_val)
+    end
+
+    prob = ODEProblem(compiled, u0, (0.0, 3600.0), pmap)
+    sol = solve(prob)
+
+    # After drainage, top layers should be drier than initial
+    for i in 1:2
+        @test sol[unk["θ_liq[$i](t)"]][end] < 0.8 * θ_sat_exp
+    end
+    # Bottom layers should be wetter than initial
+    for i in 4:N
+        @test sol[unk["θ_liq[$i](t)"]][end] > 0.1 * θ_sat_exp
+    end
+end
+
+@testitem "RichardsEquation - Equilibrium Steady State" setup = [HydrologySetup] tags = [:hydrology] begin
+    N = 5
+    sys = RichardsEquation(; N = N)
+    compiled = mtkcompile(sys)
+
+    pct_sand_val = 50.0
+    pct_clay_val = 20.0
+    Δz = 0.4
+    total_depth = N * Δz
+    θ_sat_exp = 0.489 - 0.00126 * pct_sand_val
+
+    z_nodes = [(i - 0.5) * Δz for i in 1:N]
+    z_ifaces = Float64[i * Δz for i in 0:N]
+
+    obs = Dict(string(o.lhs) => o.lhs for o in observed(compiled))
+    unk = Dict(string(u) => u for u in unknowns(compiled))
+
+    pmap = [
+        compiled.pct_sand => pct_sand_val,
+        compiled.pct_clay => pct_clay_val,
+        compiled.z_v => total_depth,
+        compiled.q_infl => 0.0,
+        compiled.q_bottom => 0.0,
+        compiled.e => zeros(N),
+        compiled.z_node => z_nodes,
+        compiled.Δz_layer => fill(Δz, N),
+        compiled.z_interface => z_ifaces,
+    ]
+
+    # Step 1: Solve briefly from a uniform initial condition to read θ_E values
+    u0_init = [unk["θ_liq[$i](t)"] => 0.5 * θ_sat_exp for i in 1:N]
+    prob_init = ODEProblem(compiled, u0_init, (0.0, 1.0), pmap)
+    sol_init = solve(prob_init)
+
+    # Read the equilibrium values (they are algebraic, computed immediately)
+    θ_E_vals = [sol_init[obs["θ_E[$i](t)"]][1] for i in 1:N]
+
+    # Step 2: Re-initialize at equilibrium and solve
+    u0_eq = [unk["θ_liq[$i](t)"] => θ_E_vals[i] for i in 1:N]
+    prob_eq = ODEProblem(compiled, u0_eq, (0.0, 3600.0), pmap)
+    sol_eq = solve(prob_eq)
+
+    # At equilibrium with zero forcing, θ_liq should remain at θ_E
+    for i in 1:N
+        @test sol_eq[unk["θ_liq[$i](t)"]][end] ≈ θ_E_vals[i] rtol = 1e-4
+    end
+end
