@@ -159,30 +159,26 @@ DataFrame(
 equations(sys_wt)
 ```
 
-### Richards' Equation (Multi-Layer Soil Water PDE)
+### Richards' Equation (PDE Soil Water Movement)
+
+Richards' equation is implemented as a PDE using MethodOfLines.jl for automatic
+spatial discretization. The function returns a named tuple containing the
+discretized ODE problem and symbolic variables.
 
 ```@example hydrology
-sys_re = RichardsEquation(; N = 5)
+using MethodOfLines, DomainSets
 
-vars = unknowns(sys_re)
-DataFrame(
-    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
-    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+result_re = RichardsEquation(;
+    N_layers = 10, Δz_total = 2.0,
+    pct_sand = 50.0, pct_clay = 20.0,
+    θ_top_val = 0.3, θ_bottom_val = 0.3,
+    θ_init_val = 0.3,
 )
-```
-
-```@example hydrology
-params = parameters(sys_re)
-DataFrame(
-    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
-    :Description => [ModelingToolkit.getdescription(p) for p in params]
-)
-```
-
-```@example hydrology
-equations(sys_re)
+println("Soil properties for 50% sand, 20% clay:")
+println("  k_sat = ", result_re.k_sat_val, " m/s")
+println("  θ_sat = ", result_re.θ_sat_val, " m³/m³")
+println("  B     = ", result_re.B_val)
+println("  ψ_sat = ", result_re.ψ_sat_val, " m")
 ```
 
 ## Analysis
@@ -416,102 +412,86 @@ combined temperature is closer to ``T_2`` than ``T_1``.
 
 ### Richards' Equation - Wetting Front Propagation (Eq. 5.59)
 
-Infiltration-driven wetting front propagating downward through a 10-layer soil
-column. The initial condition is dry soil (``\theta = 0.1 \theta_{sat}``), with
-constant infiltration applied at the surface (``q_{infl} = 10^{-6}`` m/s).
+Wetting front propagating downward through a soil column, driven by a wet
+Dirichlet boundary at the top and dry initial conditions. The soil column is
+discretized using MethodOfLines.jl.
 
 ```@example hydrology
-N = 10
-sys_re = RichardsEquation(; N = N)
-compiled_re = mtkcompile(sys_re)
+using MethodOfLines, DomainSets
 
-pct_sand = 50.0
-pct_clay = 20.0
-Δz = 0.2
-total_depth = N * Δz
-θ_sat_val = 0.489 - 0.00126 * pct_sand
+θ_sat_val = 0.489 - 0.00126 * 50.0
+Δz_total = 2.0
+N_layers = 15
+θ_dry = 0.1 * θ_sat_val
+θ_wet = 0.8 * θ_sat_val
 
-z_nodes = [(i - 0.5) * Δz for i in 1:N]
-z_ifaces = [i * Δz for i in 0:N]
+result_infl = RichardsEquation(;
+    N_layers = N_layers, Δz_total = Δz_total,
+    pct_sand = 50.0, pct_clay = 20.0,
+    θ_top_val = θ_wet,
+    θ_bottom_val = θ_dry,
+    θ_init_val = θ_dry,
+)
 
-# Build string-based lookups for scalarized unknowns/observed
-unk_re = Dict(string(u) => u for u in unknowns(compiled_re))
-obs_re = Dict(string(o.lhs) => o.lhs for o in observed(compiled_re))
+tspan = (0.0, 50000.0)
+prob_infl = remake(result_infl.prob; tspan = tspan)
+sol_infl = solve(prob_infl, saveat = 10000.0)
+θ_mat_infl = sol_infl[result_infl.θ(result_infl.t_pde, result_infl.z_var)]
 
-# Array parameters are passed as whole arrays; scalar params individually
-pmap = [
-    compiled_re.pct_sand => pct_sand,
-    compiled_re.pct_clay => pct_clay,
-    compiled_re.z_v => total_depth,
-    compiled_re.q_infl => 1e-6,
-    compiled_re.q_bottom => 0.0,
-    compiled_re.e => zeros(N),
-    compiled_re.z_node => z_nodes,
-    compiled_re.Δz_layer => fill(Δz, N),
-    compiled_re.z_interface => z_ifaces,
-]
+# Spatial grid points from the discretization
+dz = Δz_total / N_layers
+z_grid = range(dz / 2, Δz_total - dz / 2, length = size(θ_mat_infl, 2))
 
-u0 = [unk_re["θ_liq[$i](t)"] => 0.1 * θ_sat_val for i in 1:N]
-prob_re = ODEProblem(compiled_re, u0, (0.0, 50000.0), pmap)
-sol_re = solve(prob_re, saveat=10000.0)
-
-p = plot(xlabel="Volumetric Water Content (m³/m³)", ylabel="Depth (m)",
-    title="Wetting Front Propagation (Eq. 5.59)",
-    yflip=true, legend=:bottomleft)
-for (j, t_val) in enumerate(sol_re.t)
-    θ_profile = [sol_re[unk_re["θ_liq[$i](t)"]][j] for i in 1:N]
-    plot!(p, θ_profile, z_nodes, linewidth=2,
-        label="t = $(Int(t_val)) s", marker=:circle, markersize=3)
+p = plot(xlabel = "Volumetric Water Content (m³/m³)", ylabel = "Depth (m)",
+    title = "Wetting Front Propagation (Eq. 5.59)",
+    yflip = true, legend = :bottomleft)
+for (j, t_val) in enumerate(sol_infl.t)
+    plot!(p, θ_mat_infl[j, :], collect(z_grid), linewidth = 2,
+        label = "t = $(Int(t_val)) s", marker = :circle, markersize = 3)
 end
-vline!(p, [θ_sat_val], linestyle=:dash, color=:gray, label="θ_sat")
+vline!(p, [θ_sat_val], linestyle = :dash, color = :gray, label = "θ_sat")
 p
 ```
 
-The wetting front propagates downward over time as infiltration fills the top
-layers first, then redistributes water through Darcy's law. The front moves
-faster through sandy soils (higher ``k_{sat}``) and slows as the soil approaches
-saturation.
+The wetting front propagates downward over time as the wet top boundary drives
+water into the dry soil column through both capillary diffusion and gravity.
+The front moves faster through sandy soils (higher ``k_{sat}``) and slows as
+the soil approaches saturation.
 
-### Richards' Equation - Approach to Equilibrium (Eq. 5.101)
+### Richards' Equation - Gravity Drainage (Eq. 5.68)
 
-Starting from a uniform wet initial condition (``\theta = 0.8\,\theta_{sat}``),
-the soil column relaxes toward its hydrostatic equilibrium profile
-(``\theta_E``) with no external forcing.
+Starting from a moderately wet uniform initial condition with equal Dirichlet
+boundary conditions at top and bottom, the soil column evolves under the combined
+effects of nonlinear diffusion and gravity drainage.
 
 ```@example hydrology
-pmap_eq = [
-    compiled_re.pct_sand => pct_sand,
-    compiled_re.pct_clay => pct_clay,
-    compiled_re.z_v => total_depth,
-    compiled_re.q_infl => 0.0,
-    compiled_re.q_bottom => 0.0,
-    compiled_re.e => zeros(N),
-    compiled_re.z_node => z_nodes,
-    compiled_re.Δz_layer => fill(Δz, N),
-    compiled_re.z_interface => z_ifaces,
-]
+θ_mid = 0.4 * θ_sat_val
 
-u0_wet = [unk_re["θ_liq[$i](t)"] => 0.8 * θ_sat_val for i in 1:N]
-prob_eq = ODEProblem(compiled_re, u0_wet, (0.0, 200000.0), pmap_eq)
-sol_eq = solve(prob_eq, saveat=40000.0)
+result_grav = RichardsEquation(;
+    N_layers = N_layers, Δz_total = Δz_total,
+    pct_sand = 50.0, pct_clay = 20.0,
+    θ_top_val = θ_mid,
+    θ_bottom_val = θ_mid,
+    θ_init_val = θ_mid,
+)
 
-# Get equilibrium profile
-θ_E_profile = [sol_eq[obs_re["θ_E[$i](t)"]][1] for i in 1:N]
+tspan_grav = (0.0, 200000.0)
+prob_grav = remake(result_grav.prob; tspan = tspan_grav)
+sol_grav = solve(prob_grav, saveat = 40000.0)
+θ_mat_grav = sol_grav[result_grav.θ(result_grav.t_pde, result_grav.z_var)]
 
-p = plot(xlabel="Volumetric Water Content (m³/m³)", ylabel="Depth (m)",
-    title="Approach to Equilibrium (Eq. 5.101)",
-    yflip=true, legend=:bottomleft)
-for (j, t_val) in enumerate(sol_eq.t)
-    θ_profile = [sol_eq[unk_re["θ_liq[$i](t)"]][j] for i in 1:N]
-    plot!(p, θ_profile, z_nodes, linewidth=2,
-        label="t = $(Int(t_val)) s", marker=:circle, markersize=3)
+p = plot(xlabel = "Volumetric Water Content (m³/m³)", ylabel = "Depth (m)",
+    title = "Gravity Drainage (Eq. 5.68)",
+    yflip = true, legend = :bottomleft)
+for (j, t_val) in enumerate(sol_grav.t)
+    plot!(p, θ_mat_grav[j, :], collect(z_grid), linewidth = 2,
+        label = "t = $(Int(t_val)) s", marker = :circle, markersize = 3)
 end
-plot!(p, θ_E_profile, z_nodes, linewidth=3, linestyle=:dash, color=:black,
-    label="θ_E (equilibrium)", marker=:diamond, markersize=4)
+vline!(p, [θ_sat_val], linestyle = :dash, color = :gray, label = "θ_sat")
 p
 ```
 
-Starting from a uniform profile, the soil redistributes water under gravity
-and capillary forces until it reaches the equilibrium profile ``\theta_E``
-determined by the water table depth and soil properties. Deeper layers retain
-more moisture in equilibrium due to their proximity to the water table.
+With equal boundary conditions and gravity, the system evolves toward a steady
+state where the diffusive flux balances the gravitational flux. The rate of
+redistribution depends on the hydraulic conductivity, which is a strong function
+of water content through the Clapp-Hornberger relation (Eq. 5.69).

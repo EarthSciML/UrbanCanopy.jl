@@ -4,6 +4,9 @@ export SnowDensity, SnowIceContent, SnowWaterContent, SnowCompaction,
     WaterTableDepth, AquiferWaterBalance, SnowCappingRunoff, SurfaceLayerUpdate,
     PerviousRoadWaterBalance, ImperviousWaterBalance
 
+using MethodOfLines
+using DomainSets
+
 """
     SnowDensity(; name=:SnowDensity)
 
@@ -42,11 +45,15 @@ The density depends on the atmospheric temperature relative to freezing:
     eqs = [
         # Eq. 5.10: Piecewise snow density as function of temperature
         # ρ_sno = 50 + 1.7*(T_diff/1K)^1.5 [kg/m³]
-        ρ_sno ~ ifelse(T_atm > T_f + T_thresh_high,
+        ρ_sno ~ ifelse(
+            T_atm > T_f + T_thresh_high,
             ρ_warm,
-            ifelse(T_atm > T_f + T_thresh_low,
+            ifelse(
+                T_atm > T_f + T_thresh_low,
                 ρ_base + ρ_coeff * ((T_atm - T_f + T_offset) / one_K)^1.5,
-                ρ_base)),
+                ρ_base
+            )
+        ),
     ]
 
     return System(eqs, t; name)
@@ -200,9 +207,11 @@ is below a minimum value (w_ice,i ≤ 0.1 kg/m²).
 
     eqs = [
         # Eq. 5.27: Density-dependent coefficient c_1
-        c_1 ~ ifelse(w_ice / Δz > hundred_kgpm3,
+        c_1 ~ ifelse(
+            w_ice / Δz > hundred_kgpm3,
             exp(-coeff_0046 * (w_ice / Δz - hundred_kgpm3)),
-            1.0),
+            1.0
+        ),
 
         # Eq. 5.27: Liquid-dependent coefficient c_2
         c_2 ~ ifelse(w_liq / Δz > thresh_liq_density, 2.0, 1.0),
@@ -219,7 +228,7 @@ is below a minimum value (w_ice,i ≤ 0.1 kg/m²).
         # Eq. 5.31: Melt compaction rate
         # C_R3 = -(1/Δt) max(0, (f_ice^n - f_ice^{n+1}) / f_ice^n)
         # Using unit rate (1/s) since Δt factored into the f_ice difference
-        C_R3 ~ -one_per_s * max(0.0, (f_ice_n - f_ice_n1) / max(f_ice_n, 1e-10)),
+        C_R3 ~ -one_per_s * max(0.0, (f_ice_n - f_ice_n1) / max(f_ice_n, 1.0e-10)),
 
         # Eq. 5.24: Total compaction rate
         C_R ~ C_R1 + C_R2 + C_R3,
@@ -412,8 +421,8 @@ kg/(m²·s) water flux and m/s uses ρ_liq: 1 kg/(m²·s) = 1/ρ_liq m/s.
 
     eqs = [
         # Eq. 5.51: Impermeable fraction from frozen soil
-        f_frz_1 ~ (exp(-α * (1.0 - w_ice_1 / max(w_ice_1 + w_liq_1, 1e-10 * one_kgpm2))) - exp(-α)) /
-                   (1.0 - exp(-α)),
+        f_frz_1 ~ (exp(-α * (1.0 - w_ice_1 / max(w_ice_1 + w_liq_1, 1.0e-10 * one_kgpm2))) - exp(-α)) /
+            (1.0 - exp(-α)),
 
         # Eq. 5.50: Fractional saturated area
         f_sat ~ (1.0 - f_frz_1) * f_max * exp(-0.5 * f_over * z_v) + f_frz_1,
@@ -434,9 +443,11 @@ kg/(m²·s) water flux and m/s uses ρ_liq: 1 kg/(m²·s) = 1/ρ_liq m/s.
         q_over ~ f_sat * q_liq_0 + (1.0 - f_sat) * max(zero_kgpm2s, q_liq_0 - q_infl_max),
 
         # Eqs. 5.56-5.57: Infiltration
-        q_infl ~ ifelse(has_snow > 0.5,
+        q_infl ~ ifelse(
+            has_snow > 0.5,
             q_liq_0 - q_over,                          # Eq. 5.57: with snow
-            max(q_liq_0 - q_over - q_seva, zero_kgpm2s)),  # Eq. 5.56: no snow
+            max(q_liq_0 - q_over - q_seva, zero_kgpm2s)
+        ),  # Eq. 5.56: no snow
     ]
 
     return System(eqs, t; name)
@@ -521,11 +532,16 @@ All lengths in SI units (m).
         # θ̄_{E,i} = (θ_sat * ψ_sat) / ((z_{h,i} - z_{h,i-1})(1 - 1/B))
         #   × [((ψ_sat - z_v + z_{h,i})/ψ_sat)^{1-1/B} - ((ψ_sat - z_v + z_{h,i-1})/ψ_sat)^{1-1/B}]
         # Simplified: clamp to [0, θ_sat] per Eq. 5.105
-        θ_E ~ max(0.0 * θ_sat, min(θ_sat,
-            (θ_sat * ψ_sat) / ((z_h_lower - z_h_upper) * (1.0 - 1.0 / B)) *
-            (((ψ_sat - z_v + z_h_lower) / ψ_sat)^(1.0 - 1.0 / B) -
-             ((ψ_sat - z_v + z_h_upper) / ψ_sat)^(1.0 - 1.0 / B))
-        )),
+        θ_E ~ max(
+            0.0 * θ_sat, min(
+                θ_sat,
+                (θ_sat * ψ_sat) / ((z_h_lower - z_h_upper) * (1.0 - 1.0 / B)) *
+                    (
+                    ((ψ_sat - z_v + z_h_lower) / ψ_sat)^(1.0 - 1.0 / B) -
+                        ((ψ_sat - z_v + z_h_upper) / ψ_sat)^(1.0 - 1.0 / B)
+                )
+            )
+        ),
 
         # Eq. 5.106: Equilibrium matric potential
         ψ_E ~ max(ψ_sat * (max(θ_E, 0.01 * θ_sat) / θ_sat)^(-B) * one_m / one_m, ψ_min),
@@ -536,134 +552,122 @@ end
 
 
 """
-    RichardsEquation(; name=:RichardsEquation, N=10)
+    RichardsEquation(; name=:RichardsEquation, N_layers=10, Δz_total=2.0, pct_sand=50.0, pct_clay=20.0, θ_top_val=0.2, θ_bottom_val=0.2, θ_init_val=0.2)
 
-Implements Richards' equation (Eq. 5.59) for vertical soil water movement,
-discretized into `N` layers using the method of lines.
+Implements Richards' equation (Eq. 5.59) for vertical soil water movement
+using MethodOfLines.jl for automatic spatial discretization.
 
-The equation `∂θ/∂t = -∂q/∂z - Q` is semi-discretized into an N-layer ODE system
-where each layer has a volumetric water content `θ_liq[i]` as a state variable.
-Soil hydraulic properties follow Clapp and Hornberger (1978) as parameterized in
-Eqs. 5.69–5.74. Soil water flux between layers follows the modified Darcy's law
-of Zeng and Decker (2009) (Eq. 5.88). Equilibrium moisture profiles follow
-Eqs. 5.101 and 5.106.
+The governing PDE is (Eq. 5.68), written in diffusivity form:
+    ∂θ/∂t = ∂/∂z [D(θ) ∂θ/∂z] + ∂K(θ)/∂z
 
-Flux sign convention: positive upward (matching `SoilWaterFlux`).
-- Top boundary: `q_0 = -q_infl` (infiltration is downward).
-- Bottom boundary: `q_N = -q_bottom` (drainage is downward).
+where D(θ) = K(θ)|dψ/dθ| is the soil water diffusivity combining the
+Clapp-Hornberger hydraulic conductivity (Eq. 5.69) and matric potential
+(Eq. 5.73), and ∂K/∂z is the gravity drainage term. Here z is positive
+downward (depth into soil).
 
-Frozen soil effects are not included (f_frz = 0).
+Soil hydraulic properties follow Clapp and Hornberger (1978):
+- K(θ) = k_sat · (θ/θ_sat)^(2B+3)   (Eq. 5.69)
+- ψ(θ) = ψ_sat · (θ/θ_sat)^(-B)      (Eq. 5.73)
 
-**Reference**: Oleson et al. (2010), Chapter 5, Eqs. 5.59, 5.69–5.74, 5.76,
-5.87–5.88, 5.98–5.106, pp. 127–138.
+The diffusivity simplifies to:
+    D(θ) = k_sat · B · |ψ_sat| / θ_sat · (θ/θ_sat)^(B+2)
+
+Boundary conditions:
+- Top (z=0): Dirichlet BC θ = θ_top (surface water content)
+- Bottom (z=Δz_total): Dirichlet BC θ = θ_bottom (deep soil water content)
+
+Returns a named tuple `(; prob, θ, t_pde, z_var, k_sat_val, θ_sat_val, B_val, ψ_sat_val)`
+containing the discretized ODE problem and symbolic variables.
+
+**Reference**: Oleson et al. (2010), Chapter 5, Eqs. 5.59, 5.68–5.74,
+pp. 127–138.
 """
-@component function RichardsEquation(; name = :RichardsEquation, N = 10)
+function RichardsEquation(;
+        name = :RichardsEquation,
+        N_layers = 10,
+        Δz_total = 2.0,
+        pct_sand = 50.0,
+        pct_clay = 20.0,
+        θ_top_val = 0.2,
+        θ_bottom_val = 0.2,
+        θ_init_val = 0.2,
+    )
 
-    @constants begin
-        # Paper gives k_coeff = 0.0070556 mm/s; multiply by 0.001 to get m/s
-        k_coeff = 0.0070556e-3, [description = "Coefficient for saturated hydraulic conductivity (Eq. 5.70), converted from mm/s to m/s", unit = u"m/s"]
-        # Paper gives ψ_coeff = -10.0 mm; multiply by 0.001 to get m
-        ψ_coeff = -10.0e-3, [description = "Coefficient for saturated matric potential (Eq. 5.74), converted from mm to m", unit = u"m"]
-        ψ_min = -1.0e5, [description = "Minimum soil matric potential (converted from -1e8 mm to m)", unit = u"m"]
-        one_m = 1.0, [description = "Unit length for nondimensionalization", unit = u"m"]
-        one_mps = 1.0, [description = "Unit hydraulic conductivity for nondimensionalization", unit = u"m/s"]
-    end
+    # Compute soil properties from texture (Eqs. 5.70-5.74)
+    k_sat_val = 0.0070556e-3 * 10.0^(-0.884 + 0.0153 * pct_sand)   # Eq. 5.70 [m/s]
+    θ_sat_val = 0.489 - 0.00126 * pct_sand                          # Eq. 5.71 [m³/m³]
+    B_val = 2.91 + 0.159 * pct_clay                                  # Eq. 5.72 [-]
+    ψ_sat_val = -10.0e-3 * 10.0^(1.88 - 0.0131 * pct_sand)         # Eq. 5.74 [m]
 
-    @parameters begin
-        pct_sand, [description = "Percent sand content (dimensionless)"]
-        pct_clay, [description = "Percent clay content (dimensionless)"]
-        z_v, [description = "Water table depth", unit = u"m"]
-        q_infl, [description = "Infiltration rate at surface (positive downward)", unit = u"m/s"]
-        q_bottom, [description = "Bottom boundary flux (positive downward, 0 for zero-flux)", unit = u"m/s"]
-        e[1:N], [description = "Evapotranspiration sink per layer", unit = u"m/s"]
-        z_node[1:N], [description = "Node depth of each layer", unit = u"m"]
-        Δz_layer[1:N], [description = "Layer thickness", unit = u"m"]
-        z_interface[1:(N + 1)], [description = "Interface depth (N+1 interfaces for N layers)", unit = u"m"]
-    end
+    # NOTE: Numerical values are substituted directly into the PDE rather than
+    # using symbolic parameters because: (1) MethodOfLines.jl cannot propagate
+    # units through nonlinear auxiliary variable transformations, and (2) the
+    # nonlinear discretization with upwinding creates Pair{Num,Float64} objects
+    # that ModelingToolkit's TearingState cannot handle as defaults.
+    # All values are in SI units: t_pde [s], z_var [m], θ [m³/m³],
+    # k_sat [m/s], ψ_sat [m].
 
-    @variables begin
-        # State variables (N ODEs)
-        θ_liq[1:N](t), [description = "Volumetric liquid water content per layer", unit = u"m^3/m^3"]
-        # Soil properties from texture (4 algebraic)
-        k_sat(t), [description = "Saturated hydraulic conductivity (Eq. 5.70)", unit = u"m/s"]
-        θ_sat(t), [description = "Porosity (Eq. 5.71)", unit = u"m^3/m^3"]
-        B_CH(t), [description = "Clapp-Hornberger exponent (Eq. 5.72) (dimensionless)"]
-        ψ_sat(t), [description = "Saturated matric potential (Eq. 5.74)", unit = u"m"]
-        # Per-layer algebraic variables
-        ψ[1:N](t), [description = "Matric potential per layer (Eq. 5.73)", unit = u"m"]
-        θ_E[1:N](t), [description = "Equilibrium volumetric water content per layer (Eq. 5.101)", unit = u"m^3/m^3"]
-        ψ_E[1:N](t), [description = "Equilibrium matric potential per layer (Eq. 5.106)", unit = u"m"]
-        # Interface variables
-        k_interface[1:(N - 1)](t), [description = "Hydraulic conductivity at internal interfaces (Eq. 5.69)", unit = u"m/s"]
-        q[1:(N - 1)](t), [description = "Water flux at internal interfaces (Eq. 5.88, positive upward)", unit = u"m/s"]
-    end
+    @parameters t_pde
+    @parameters z_var
 
-    eqs = Equation[]
+    @variables θ(..)
 
-    # ===== Soil properties from texture (4 equations) =====
-    # Eq. 5.70: Saturated hydraulic conductivity
-    push!(eqs, k_sat ~ k_coeff * 10.0^(-0.884 + 0.0153 * pct_sand))
-    # Eq. 5.71: Porosity
-    push!(eqs, θ_sat ~ 0.489 - 0.00126 * pct_sand)
-    # Eq. 5.72: Clapp-Hornberger exponent
-    push!(eqs, B_CH ~ 2.91 + 0.159 * pct_clay)
-    # Eq. 5.74: Saturated matric potential
-    push!(eqs, ψ_sat ~ ψ_coeff * 10.0^(1.88 - 0.0131 * pct_sand))
+    Dt = Differential(t_pde)
+    Dz = Differential(z_var)
 
-    # ===== Per-layer matric potential (N equations) =====
-    for i in 1:N
-        # Eq. 5.73: ψ_i = ψ_sat * (θ_i/θ_sat)^{-B}, clamped to [ψ_min, 0]
-        push!(eqs, ψ[i] ~ max(ψ_sat * (max(θ_liq[i], 0.01 * θ_sat) / θ_sat)^(-B_CH) * one_m / one_m, ψ_min))
-    end
+    # Richards' equation in diffusivity form (Eq. 5.68):
+    #   ∂θ/∂t = ∂/∂z[D(θ)·∂θ/∂z] + ∂K(θ)/∂z
+    #
+    # D(θ) = K(θ)|dψ/dθ| = k_sat · B · |ψ_sat| / θ_sat · (θ/θ_sat)^(B+2)
+    #   from Eq. 5.69: K(θ) = k_sat · (θ/θ_sat)^(2B+3)
+    #   and Eq. 5.73: dψ/dθ = -B · ψ_sat/θ_sat · (θ/θ_sat)^(-B-1)
+    #
+    # Expanded using the chain rule to avoid nested derivatives that
+    # MethodOfLines cannot handle:
+    #   ∂θ/∂t = D(θ)·∂²θ/∂z² + D'(θ)·(∂θ/∂z)² + K'(θ)·∂θ/∂z
+    #
+    # where:
+    #   D'(θ) = k_sat·B·(B+2)·|ψ_sat|/θ_sat²·(θ/θ_sat)^(B+1)
+    #   K'(θ) = k_sat·(2B+3)/θ_sat·(θ/θ_sat)^(2B+2)
 
-    # ===== Per-layer equilibrium θ_E (N equations) =====
-    for i in 1:N
-        # Eq. 5.101: Layer-averaged equilibrium water content
-        push!(eqs, θ_E[i] ~ max(0.0 * θ_sat, min(θ_sat,
-            (θ_sat * ψ_sat) / ((z_interface[i + 1] - z_interface[i]) * (1.0 - 1.0 / B_CH)) *
-            (((ψ_sat - z_v + z_interface[i + 1]) / ψ_sat)^(1.0 - 1.0 / B_CH) -
-             ((ψ_sat - z_v + z_interface[i]) / ψ_sat)^(1.0 - 1.0 / B_CH))
-        )))
-    end
+    Dzz = Differential(z_var)^2
+    θ_v = θ(t_pde, z_var)
+    θ_ratio = θ_v / θ_sat_val
 
-    # ===== Per-layer equilibrium ψ_E (N equations) =====
-    for i in 1:N
-        # Eq. 5.106: Equilibrium matric potential
-        push!(eqs, ψ_E[i] ~ max(ψ_sat * (max(θ_E[i], 0.01 * θ_sat) / θ_sat)^(-B_CH) * one_m / one_m, ψ_min))
-    end
+    # D(θ): soil water diffusivity (uses numerical values directly)
+    D_coeff = k_sat_val * B_val * (-ψ_sat_val) / θ_sat_val * θ_ratio^(B_val + 2.0)
+    # D'(θ): derivative of diffusivity w.r.t. θ
+    Dp_coeff = k_sat_val * B_val * (B_val + 2.0) * (-ψ_sat_val) / θ_sat_val^2 * θ_ratio^(B_val + 1.0)
+    # K'(θ): derivative of hydraulic conductivity w.r.t. θ
+    Kp_coeff = k_sat_val * (2.0 * B_val + 3.0) / θ_sat_val * θ_ratio^(2.0 * B_val + 2.0)
 
-    # ===== Interface hydraulic conductivity (N-1 equations) =====
-    for j in 1:(N - 1)
-        # Eq. 5.69: k = k_sat * (θ/θ_sat)^{2B+3}, averaged at interface
-        S_j = max(θ_liq[j], 0.01 * θ_sat) / θ_sat
-        S_jp1 = max(θ_liq[j + 1], 0.01 * θ_sat) / θ_sat
-        S_avg = 0.5 * (S_j + S_jp1)
-        push!(eqs, k_interface[j] ~ k_sat * S_avg^(2.0 * B_CH + 3.0) * one_mps / one_mps)
-    end
+    eq = [
+        Dt(θ_v) ~ D_coeff * Dzz(θ_v) +
+            Dp_coeff * Dz(θ_v)^2 +
+            Kp_coeff * Dz(θ_v),
+    ]  # Eq. 5.68 (expanded)
 
-    # ===== Interface flux (N-1 equations) =====
-    for j in 1:(N - 1)
-        # Eq. 5.88: Soil water flux (positive upward)
-        push!(eqs, q[j] ~ -k_interface[j] * ((ψ[j] - ψ[j + 1]) + (ψ_E[j + 1] - ψ_E[j])) / (z_node[j + 1] - z_node[j]))
-    end
+    # Boundary conditions: Dirichlet BCs fix water content at boundaries
+    bcs = [
+        θ(0, z_var) ~ θ_init_val,              # Initial condition
+        θ(t_pde, 0.0) ~ θ_top_val,             # Dirichlet BC at top
+        θ(t_pde, Δz_total) ~ θ_bottom_val,     # Dirichlet BC at bottom
+    ]
 
-    # ===== Conservation ODEs (N equations) =====
-    # Eq. 5.76: Δz[i] * dθ/dt = q_below - q_above - e[i]
-    # With BCs: q_above for layer 1 = -q_infl, q_below for layer N = -q_bottom
-    for i in 1:N
-        if i == 1
-            # Top layer: upper boundary is surface infiltration
-            push!(eqs, D(θ_liq[i]) ~ (q[1] + q_infl - e[i]) / Δz_layer[i])
-        elseif i == N
-            # Bottom layer: lower boundary is bottom flux
-            push!(eqs, D(θ_liq[i]) ~ (-q_bottom - q[N - 1] - e[i]) / Δz_layer[i])
-        else
-            # Interior layer
-            push!(eqs, D(θ_liq[i]) ~ (q[i] - q[i - 1] - e[i]) / Δz_layer[i])
-        end
-    end
+    domains = [
+        t_pde ∈ Interval(0.0, 1.0),
+        z_var ∈ Interval(0.0, Δz_total),
+    ]
 
-    return System(eqs, t; name)
+    @named pdesys = PDESystem(
+        eq, bcs, domains, [t_pde, z_var], [θ(t_pde, z_var)]
+    )
+
+    dz = Δz_total / N_layers
+    discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    return (; prob, θ, t_pde, z_var, k_sat_val, θ_sat_val, B_val, ψ_sat_val)
 end
 
 
@@ -747,8 +751,12 @@ Conversion: W_a [kg/m²] / ρ_liq [kg/m³] gives meters of water.
         # Eq. 5.146: z_v = z_{h,N_levsoi} + 25 - W_a / (10^3 * S_y)
         # Original: W_a in mm, so W_a/1000 gives m. With W_a in kg/m²,
         # W_a/ρ_liq gives m of water, then divide by S_y for water table depth.
-        z_v ~ max(z_v_min, min(z_v_max,
-            z_h_bottom + z_offset - W_a / (ρ_liq * S_y))),
+        z_v ~ max(
+            z_v_min, min(
+                z_v_max,
+                z_h_bottom + z_offset - W_a / (ρ_liq * S_y)
+            )
+        ),
     ]
 
     return System(eqs, t; name)
