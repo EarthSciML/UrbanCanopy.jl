@@ -63,7 +63,7 @@ sys = SnowDensity()
 vars = unknowns(sys)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
     :Description => [ModelingToolkit.getdescription(v) for v in vars]
 )
 ```
@@ -72,13 +72,117 @@ DataFrame(
 params = parameters(sys)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
     :Description => [ModelingToolkit.getdescription(p) for p in params]
 )
 ```
 
 ```@example hydrology
 equations(sys)
+```
+
+### Snow Ice Content
+
+```@example hydrology
+sys_ice = SnowIceContent()
+
+vars = unknowns(sys_ice)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_ice)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_ice)
+```
+
+### Snow Water Content
+
+```@example hydrology
+sys_swc = SnowWaterContent()
+
+vars = unknowns(sys_swc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_swc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_swc)
+```
+
+### Snow Compaction
+
+```@example hydrology
+sys_sc = SnowCompaction()
+
+vars = unknowns(sys_sc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_sc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_sc)
+```
+
+### Snow Layer Combination
+
+```@example hydrology
+sys_slc = SnowLayerCombination()
+
+vars = unknowns(sys_slc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_slc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_slc)
 ```
 
 ### Soil Hydraulic Properties
@@ -89,7 +193,7 @@ sys_soil = SoilHydraulicProperties()
 vars = unknowns(sys_soil)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
     :Description => [ModelingToolkit.getdescription(v) for v in vars]
 )
 ```
@@ -98,7 +202,7 @@ DataFrame(
 params = parameters(sys_soil)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
     :Description => [ModelingToolkit.getdescription(p) for p in params]
 )
 ```
@@ -115,7 +219,7 @@ sys_gw = GroundwaterDrainage()
 vars = unknowns(sys_gw)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
     :Description => [ModelingToolkit.getdescription(v) for v in vars]
 )
 ```
@@ -124,7 +228,7 @@ DataFrame(
 params = parameters(sys_gw)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
     :Description => [ModelingToolkit.getdescription(p) for p in params]
 )
 ```
@@ -141,7 +245,7 @@ sys_wt = WaterTableDepth()
 vars = unknowns(sys_wt)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
-    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
     :Description => [ModelingToolkit.getdescription(v) for v in vars]
 )
 ```
@@ -150,7 +254,7 @@ DataFrame(
 params = parameters(sys_wt)
 DataFrame(
     :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
-    :Units => [dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
     :Description => [ModelingToolkit.getdescription(p) for p in params]
 )
 ```
@@ -179,6 +283,214 @@ println("  k_sat = ", result_re.k_sat_val, " m/s")
 println("  θ_sat = ", result_re.θ_sat_val, " m³/m³")
 println("  B     = ", result_re.B_val)
 println("  ψ_sat = ", result_re.ψ_sat_val, " m")
+```
+
+### Surface Runoff and Infiltration
+
+```@example hydrology
+sys_sri = SurfaceRunoffInfiltration()
+
+vars = unknowns(sys_sri)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_sri)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_sri)
+```
+
+### Soil Water Flux
+
+```@example hydrology
+sys_swf = SoilWaterFlux()
+
+vars = unknowns(sys_swf)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_swf)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_swf)
+```
+
+### Soil Water Equilibrium
+
+```@example hydrology
+sys_swe = SoilWaterEquilibrium()
+
+vars = unknowns(sys_swe)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_swe)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_swe)
+```
+
+### Aquifer Water Balance
+
+```@example hydrology
+sys_awb = AquiferWaterBalance()
+
+vars = unknowns(sys_awb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_awb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_awb)
+```
+
+### Snow Capping Runoff
+
+```@example hydrology
+sys_scr = SnowCappingRunoff()
+
+vars = unknowns(sys_scr)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_scr)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_scr)
+```
+
+### Surface Layer Update
+
+```@example hydrology
+sys_slu = SurfaceLayerUpdate()
+
+vars = unknowns(sys_slu)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_slu)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_slu)
+```
+
+### Pervious Road Water Balance
+
+```@example hydrology
+sys_prwb = PerviousRoadWaterBalance()
+
+vars = unknowns(sys_prwb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_prwb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_prwb)
+```
+
+### Impervious Water Balance
+
+```@example hydrology
+sys_iwb = ImperviousWaterBalance()
+
+vars = unknowns(sys_iwb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_iwb)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_iwb)
 ```
 
 ## Analysis
