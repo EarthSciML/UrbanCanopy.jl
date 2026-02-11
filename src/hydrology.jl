@@ -326,7 +326,6 @@ All values converted to SI units (m, m/s) from the paper's mm units.
         # Paper gives ψ_coeff = -10.0 mm; multiply by 0.001 to get m
         ψ_coeff = -10.0e-3, [description = "Coefficient for saturated matric potential (Eq. 5.74), converted from mm to m", unit = u"m"]
         ψ_min = -1.0e5, [description = "Minimum soil matric potential (converted from -1e8 mm to m)", unit = u"m"]
-        one_m = 1.0, [description = "Unit length for nondimensionalization", unit = u"m"]
     end
 
     @parameters begin
@@ -359,7 +358,7 @@ All values converted to SI units (m, m/s) from the paper's mm units.
         # Eq. 5.73: Soil matric potential
         # ψ_i = ψ_sat,i * (θ_i / θ_sat,i)^{-B_i}
         # Constrained: θ_i/θ_sat,i ∈ [0.01, 1] and ψ ≥ ψ_min
-        ψ ~ max(ψ_sat * (max(θ_i, 0.01 * θ_sat) / θ_sat)^(-B) * one_m / one_m, ψ_min),
+        ψ ~ max(ψ_sat * (max(θ_i, 0.01 * θ_sat) / θ_sat)^(-B), ψ_min),
     ]
 
     return System(eqs, t; name)
@@ -509,7 +508,6 @@ All lengths in SI units (m).
 @component function SoilWaterEquilibrium(; name = :SoilWaterEquilibrium)
 
     @constants begin
-        one_m = 1.0, [description = "Unit length for nondimensionalization", unit = u"m"]
         ψ_min = -1.0e5, [description = "Minimum matric potential (converted from -1e8 mm)", unit = u"m"]
     end
 
@@ -528,23 +526,32 @@ All lengths in SI units (m).
     end
 
     eqs = [
-        # Eq. 5.101: Layer-averaged equilibrium water content
-        # θ̄_{E,i} = (θ_sat * ψ_sat) / ((z_{h,i} - z_{h,i-1})(1 - 1/B))
-        #   × [((ψ_sat - z_v + z_{h,i})/ψ_sat)^{1-1/B} - ((ψ_sat - z_v + z_{h,i-1})/ψ_sat)^{1-1/B}]
-        # Simplified: clamp to [0, θ_sat] per Eq. 5.105
-        θ_E ~ max(
-            0.0 * θ_sat, min(
-                θ_sat,
-                (θ_sat * ψ_sat) / ((z_h_lower - z_h_upper) * (1.0 - 1.0 / B)) *
-                    (
-                    ((ψ_sat - z_v + z_h_lower) / ψ_sat)^(1.0 - 1.0 / B) -
-                        ((ψ_sat - z_v + z_h_upper) / ψ_sat)^(1.0 - 1.0 / B)
+        # Eqs. 5.101-5.102: Layer-averaged equilibrium water content
+        # When z_v < z_h_upper (water table above the layer), the layer is fully saturated.
+        # When z_v > z_h_lower (water table below the layer), use Eq. 5.101.
+        # When z_h_upper < z_v < z_h_lower (water table within the layer), use Eq. 5.102
+        # which is a weighted average of saturated and unsaturated parts.
+        # Here we use a simplified guard: if the water table is above the layer top,
+        # return θ_sat; otherwise compute Eq. 5.101 with clamping per Eq. 5.105.
+        θ_E ~ ifelse(
+            z_v < z_h_upper,
+            # Water table above layer: fully saturated
+            θ_sat,
+            # Water table below or within layer: apply Eq. 5.101 with clamping
+            max(
+                0.0 * θ_sat, min(
+                    θ_sat,
+                    (θ_sat * ψ_sat) / ((z_h_lower - z_h_upper) * (1.0 - 1.0 / B)) *
+                        (
+                        ((ψ_sat - z_v + z_h_lower) / ψ_sat)^(1.0 - 1.0 / B) -
+                            ((ψ_sat - z_v + z_h_upper) / ψ_sat)^(1.0 - 1.0 / B)
+                    )
                 )
             )
         ),
 
         # Eq. 5.106: Equilibrium matric potential
-        ψ_E ~ max(ψ_sat * (max(θ_E, 0.01 * θ_sat) / θ_sat)^(-B) * one_m / one_m, ψ_min),
+        ψ_E ~ max(ψ_sat * (max(θ_E, 0.01 * θ_sat) / θ_sat)^(-B), ψ_min),
     ]
 
     return System(eqs, t; name)
@@ -578,6 +585,10 @@ Boundary conditions:
 
 Returns a named tuple `(; prob, θ, t_pde, z_var, k_sat_val, θ_sat_val, B_val, ψ_sat_val)`
 containing the discretized ODE problem and symbolic variables.
+
+Note: This function does not use `@component` because MethodOfLines.jl's `discretize()`
+returns an `ODEProblem` rather than a ModelingToolkit `System`. The PDE discretization
+paradigm requires working directly with the generated ODE problem.
 
 **Reference**: Oleson et al. (2010), Chapter 5, Eqs. 5.59, 5.68–5.74,
 pp. 127–138.
@@ -933,6 +944,7 @@ no sub-surface drainage, and intercept both liquid and solid precipitation.
         q_rain, [description = "Liquid precipitation rate (Eq. 5.4)", unit = u"kg/(m^2*s)"]
         q_sno, [description = "Solid precipitation rate (Eq. 5.5)", unit = u"kg/(m^2*s)"]
         E_surface, [description = "Total evaporation from surface", unit = u"kg/(m^2*s)"]
+        q_over, [description = "Surface runoff", unit = u"kg/(m^2*s)"]
         q_rgwl, [description = "Liquid runoff from groundwater", unit = u"kg/(m^2*s)"]
         q_snwcp_ice, [description = "Solid runoff from snow capping", unit = u"kg/(m^2*s)"]
     end
@@ -951,7 +963,7 @@ no sub-surface drainage, and intercept both liquid and solid precipitation.
         q_grnd_ice ~ q_sno,
 
         # Eqs. 5.2-5.3: Water balance for roof/impervious road
-        water_input ~ q_rain + q_sno - E_surface - q_rgwl - q_snwcp_ice,
+        water_input ~ q_rain + q_sno - E_surface - q_over - q_rgwl - q_snwcp_ice,
     ]
 
     return System(eqs, t; name)

@@ -336,6 +336,7 @@ end
     @test "q_rain" in param_names
     @test "q_sno" in param_names
     @test "E_surface" in param_names
+    @test "q_over" in param_names
     @test "q_rgwl" in param_names
     @test "q_snwcp_ice" in param_names
 
@@ -789,8 +790,8 @@ end
         compiled,
         [
             compiled.q_rain => 0.01, compiled.q_sno => 0.005,
-            compiled.E_surface => 0.002, compiled.q_rgwl => 0.0005,
-            compiled.q_snwcp_ice => 0.0001,
+            compiled.E_surface => 0.002, compiled.q_over => 0.003,
+            compiled.q_rgwl => 0.0005, compiled.q_snwcp_ice => 0.0001,
         ],
         (0.0, 1.0)
     )
@@ -800,8 +801,8 @@ end
     @test sol[compiled.q_grnd_liq][end] ≈ 0.01 rtol = 1.0e-6
     # q_grnd_ice = q_sno
     @test sol[compiled.q_grnd_ice][end] ≈ 0.005 rtol = 1.0e-6
-    # water_input = q_rain + q_sno - E_surface - q_rgwl - q_snwcp_ice
-    expected = 0.01 + 0.005 - 0.002 - 0.0005 - 0.0001
+    # water_input = q_rain + q_sno - E_surface - q_over - q_rgwl - q_snwcp_ice (Eqs. 5.2-5.3)
+    expected = 0.01 + 0.005 - 0.002 - 0.003 - 0.0005 - 0.0001
     @test sol[compiled.water_input][end] ≈ expected rtol = 1.0e-6
 end
 
