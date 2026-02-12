@@ -1234,19 +1234,23 @@ end
     # w_liq_1 = 0.1, q_liq_0 = 0.2, q_seva = 0.1
     # q_over = max(0, 0.1/1 + 0.2 - 0.1 - 1.0/1) = max(0, -0.8) = 0
     # w_liq_1_new = max(0.1 + (0.2 - 0.1)*1, 0) = 0.2
-    prob2 = remake(prob; p = [
-        compiled.w_liq_1 => 0.1, compiled.q_liq_0 => 0.2,
-        compiled.q_seva => 0.1, compiled.has_snow => 0.0,
-    ])
+    prob2 = remake(
+        prob; p = [
+            compiled.w_liq_1 => 0.1, compiled.q_liq_0 => 0.2,
+            compiled.q_seva => 0.1, compiled.has_snow => 0.0,
+        ]
+    )
     sol2 = solve(prob2)
     @test sol2[compiled.q_over][end] ≈ 0.0 atol = 1.0e-10
     @test sol2[compiled.w_liq_1_new][end] ≈ 0.2 rtol = 1.0e-6
 
     # Case 3: With snow, all liquid becomes runoff
-    prob3 = remake(prob; p = [
-        compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.3,
-        compiled.q_seva => 0.1, compiled.has_snow => 1.0,
-    ])
+    prob3 = remake(
+        prob; p = [
+            compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.3,
+            compiled.q_seva => 0.1, compiled.has_snow => 1.0,
+        ]
+    )
     sol3 = solve(prob3)
     @test sol3[compiled.q_over][end] ≈ 0.3 rtol = 1.0e-6
 end
@@ -1256,10 +1260,12 @@ end
     compiled = mtkcompile(sys)
 
     # Higher precipitation rate should give more runoff
-    prob = ODEProblem(compiled, [
-        compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.1,
-        compiled.q_seva => 0.0, compiled.has_snow => 0.0,
-    ], (0.0, 1.0))
+    prob = ODEProblem(
+        compiled, [
+            compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.1,
+            compiled.q_seva => 0.0, compiled.has_snow => 0.0,
+        ], (0.0, 1.0)
+    )
 
     q_vals = [0.5, 1.0, 2.0, 5.0]
     runoffs = Float64[]
@@ -1309,11 +1315,13 @@ end
     k_sat = 1.0e-5
     θ_sat = 0.4
     B = 6.0
-    prob = ODEProblem(compiled, [
-        compiled.k_sat_h => k_sat, compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
-        compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
-        compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
-    ], (0.0, 1.0))
+    prob = ODEProblem(
+        compiled, [
+            compiled.k_sat_h => k_sat, compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
+            compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
+            compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
+        ], (0.0, 1.0)
+    )
     sol = solve(prob)
     @test sol[compiled.k_h][end] ≈ k_sat rtol = 1.0e-6
 
@@ -1345,11 +1353,13 @@ end
     θ_sat = 0.4
     B = 6.0
 
-    prob = ODEProblem(compiled, [
-        compiled.k_sat_h => k_sat, compiled.θ_upper => 0.1, compiled.θ_lower => 0.1,
-        compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
-        compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
-    ], (0.0, 1.0))
+    prob = ODEProblem(
+        compiled, [
+            compiled.k_sat_h => k_sat, compiled.θ_upper => 0.1, compiled.θ_lower => 0.1,
+            compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
+            compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
+        ], (0.0, 1.0)
+    )
 
     # Higher water content should give higher conductivity
     θ_vals = [0.1, 0.2, 0.3, 0.4]
@@ -1367,10 +1377,12 @@ end
     f_vals = [0.0, 0.25, 0.5, 0.75, 1.0]
     k_frz = Float64[]
     for f in f_vals
-        p = remake(prob; p = [
-            compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
-            compiled.f_frz_upper => f, compiled.f_frz_lower => f,
-        ])
+        p = remake(
+            prob; p = [
+                compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
+                compiled.f_frz_upper => f, compiled.f_frz_lower => f,
+            ]
+        )
         s = solve(p)
         push!(k_frz, s[compiled.k_h][end])
     end
