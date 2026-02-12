@@ -44,6 +44,9 @@ SnowCappingRunoff
 SurfaceLayerUpdate
 PerviousRoadWaterBalance
 ImperviousWaterBalance
+ImperviousRunoff
+InterfaceHydraulicConductivity
+SoilWaterContentCalc
 ```
 
 ## Implementation
@@ -493,6 +496,101 @@ DataFrame(
 equations(sys_iwb)
 ```
 
+### Impervious Runoff
+
+```@example hydrology
+sys_ir = ImperviousRunoff()
+
+vars = unknowns(sys_ir)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_ir)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_ir)
+```
+
+### Interface Hydraulic Conductivity
+
+```@example hydrology
+sys_ihc = InterfaceHydraulicConductivity()
+
+vars = unknowns(sys_ihc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_ihc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_ihc)
+```
+
+### Soil Water Content
+
+```@example hydrology
+sys_swcc = SoilWaterContentCalc()
+
+vars = unknowns(sys_swcc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape = false)) for v in vars],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(v)) for v in vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in vars]
+)
+```
+
+```@example hydrology
+params = parameters(sys_swcc)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(p, escape = false)) for p in params],
+    :Units => [DynamicQuantities.dimension(ModelingToolkit.get_unit(p)) for p in params],
+    :Description => [ModelingToolkit.getdescription(p) for p in params]
+)
+```
+
+```@example hydrology
+equations(sys_swcc)
+```
+
+### Table 5.1: Snow Layer Thickness Bounds
+
+The minimum and maximum thicknesses for the five snow layers used in the model
+(Table 5.1, p. 121):
+
+| Layer | ``\Delta z_{min}`` (m) | ``(\Delta z_{max})_l`` (m) | ``(\Delta z_{max})_u`` (m) |
+|:-----:|:----------------------:|:--------------------------:|:--------------------------:|
+|   1 (top)   | 0.010 | 0.03 | 0.02 |
+|   2   | 0.015 | 0.07 | 0.05 |
+|   3   | 0.025 | 0.18 | 0.11 |
+|   4   | 0.055 | 0.41 | 0.23 |
+|   5 (bottom)  | 0.115 | --- | --- |
+
+Where ``(\Delta z_{max})_l`` and ``(\Delta z_{max})_u`` are the maximum thickness
+at the lower bound (when number of layers equals the layer index) and upper bound
+(when number of layers exceeds the layer index), respectively.
+
 ## Analysis
 
 The following figures illustrate the key parametric relationships implemented
@@ -807,3 +905,93 @@ With equal boundary conditions and gravity, the system evolves toward a steady
 state where the diffusive flux balances the gravitational flux. The rate of
 redistribution depends on the hydraulic conductivity, which is a strong function
 of water content through the Clapp-Hornberger relation (Eq. 5.69).
+
+### Interface Hydraulic Conductivity vs Saturation (Eq. 5.69)
+
+Hydraulic conductivity at a layer interface as a function of saturation degree
+for different Clapp-Hornberger exponents B, showing the strong nonlinearity
+(cf. Eq. 5.69, p. 131). The frozen fraction is set to zero.
+
+```@example hydrology
+sys_ihc = InterfaceHydraulicConductivity()
+compiled_ihc = mtkcompile(sys_ihc)
+
+k_sat = 1.0e-5  # m/s
+θ_sat = 0.4     # m³/m³
+sat_range = range(0.05, 1.0, length = 100)
+
+prob_ihc = ODEProblem(compiled_ihc, [
+    compiled_ihc.k_sat_h => k_sat, compiled_ihc.θ_upper => 0.1,
+    compiled_ihc.θ_lower => 0.1,
+    compiled_ihc.θ_sat_upper => θ_sat, compiled_ihc.θ_sat_lower => θ_sat,
+    compiled_ihc.B_i => 6.0, compiled_ihc.f_frz_upper => 0.0,
+    compiled_ihc.f_frz_lower => 0.0,
+], (0.0, 1.0))
+
+p = plot(xlabel = "Saturation Degree (θ/θ_sat)",
+    ylabel = "k/k_sat",
+    title = "Interface Hydraulic Conductivity (Eq. 5.69)",
+    yscale = :log10, legend = :bottomright)
+
+for B in [3.0, 6.0, 9.0, 12.0]
+    k_vals = Float64[]
+    for s in sat_range
+        θ_val = s * θ_sat
+        pr = remake(prob_ihc; p = [
+            compiled_ihc.θ_upper => θ_val, compiled_ihc.θ_lower => θ_val,
+            compiled_ihc.B_i => B,
+        ])
+        sol = solve(pr)
+        push!(k_vals, sol[compiled_ihc.k_h][end] / k_sat)
+    end
+    plot!(p, collect(sat_range), k_vals, linewidth = 2, label = "B = $(Int(B))")
+end
+p
+```
+
+Higher Clapp-Hornberger exponents (clay-rich soils) produce steeper conductivity
+curves, reflecting the narrower pore-size distribution and stronger moisture
+dependence of hydraulic conductivity. At full saturation (``\theta/\theta_{sat} = 1``),
+the conductivity equals ``k_{sat}`` regardless of B.
+
+### Impervious Surface Runoff vs Precipitation (Eq. 5.47)
+
+Runoff from impervious surfaces (roof and impervious road) as a function of
+precipitation rate, for different initial surface water contents. The ponding
+limit is 1 kg/m² (cf. Eqs. 5.47-5.48, pp. 124-125).
+
+```@example hydrology
+sys_ir = ImperviousRunoff()
+compiled_ir = mtkcompile(sys_ir)
+
+q_range = range(0.0, 5.0, length = 200)
+
+prob_ir = ODEProblem(compiled_ir, [
+    compiled_ir.w_liq_1 => 0.5, compiled_ir.q_liq_0 => 0.0,
+    compiled_ir.q_seva => 0.0, compiled_ir.has_snow => 0.0,
+], (0.0, 1.0))
+
+p = plot(xlabel = "Liquid Precipitation Rate (kg m⁻² s⁻¹)",
+    ylabel = "Surface Runoff (kg m⁻² s⁻¹)",
+    title = "Impervious Surface Runoff (Eq. 5.47)",
+    legend = :topleft)
+
+for w0 in [0.0, 0.5, 1.0, 1.5]
+    runoff_vals = Float64[]
+    for q in q_range
+        pr = remake(prob_ir; p = [compiled_ir.w_liq_1 => w0, compiled_ir.q_liq_0 => q])
+        sol = solve(pr)
+        push!(runoff_vals, sol[compiled_ir.q_over][end])
+    end
+    plot!(p, collect(q_range), runoff_vals, linewidth = 2,
+        label = "w_liq = $(w0) kg/m²")
+end
+plot!(p, q_range, q_range, linestyle = :dash, color = :gray, label = "1:1 line")
+p
+```
+
+When surface water exceeds the ponding limit (1 kg/m²), any additional input
+becomes runoff immediately. Higher initial surface water content (``w_{liq,1}``)
+shifts the runoff curve to the left, reflecting less available storage.
+The dashed 1:1 line represents the theoretical maximum when all precipitation
+becomes runoff.

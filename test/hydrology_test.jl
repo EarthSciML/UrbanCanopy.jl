@@ -1185,3 +1185,272 @@ end
     @test sol_sand.retcode == :Success || sol_sand.retcode == ReturnCode.Success
     @test sol_clay.retcode == :Success || sol_clay.retcode == ReturnCode.Success
 end
+
+# ============================================================================
+# ImperviousRunoff Tests
+# ============================================================================
+
+@testitem "ImperviousRunoff - Structural Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = ImperviousRunoff()
+
+    @test length(equations(sys)) == 3
+    @test length(unknowns(sys)) == 3
+
+    unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
+    @test "q_over" in unk_names
+    @test "q_over_nosnow" in unk_names
+    @test "w_liq_1_new" in unk_names
+
+    param_names = Set(string(Symbolics.tosymbol(p, escape = false)) for p in parameters(sys))
+    @test "w_liq_1" in param_names
+    @test "q_liq_0" in param_names
+    @test "q_seva" in param_names
+    @test "has_snow" in param_names
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "ImperviousRunoff - Equation Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = ImperviousRunoff()
+    compiled = mtkcompile(sys)
+
+    # Case 1: No snow, runoff occurs (excess above ponding limit)
+    # w_liq_1 = 2.0 kg/m^2, q_liq_0 = 0.5 kg/(m^2*s), q_seva = 0.1 kg/(m^2*s)
+    # q_over = max(0, 2.0/1.0 + 0.5 - 0.1 - 1.0/1.0) = max(0, 1.4) = 1.4
+    prob = ODEProblem(
+        compiled,
+        [
+            compiled.w_liq_1 => 2.0, compiled.q_liq_0 => 0.5,
+            compiled.q_seva => 0.1, compiled.has_snow => 0.0,
+        ],
+        (0.0, 1.0)
+    )
+    sol = solve(prob)
+    @test sol[compiled.q_over][end] ≈ 1.4 rtol = 1.0e-6
+    @test sol[compiled.w_liq_1_new][end] ≈ 1.0 rtol = 1.0e-6  # capped at w_pond_max
+
+    # Case 2: No snow, no runoff (below ponding limit)
+    # w_liq_1 = 0.1, q_liq_0 = 0.2, q_seva = 0.1
+    # q_over = max(0, 0.1/1 + 0.2 - 0.1 - 1.0/1) = max(0, -0.8) = 0
+    # w_liq_1_new = max(0.1 + (0.2 - 0.1)*1, 0) = 0.2
+    prob2 = remake(prob; p = [
+        compiled.w_liq_1 => 0.1, compiled.q_liq_0 => 0.2,
+        compiled.q_seva => 0.1, compiled.has_snow => 0.0,
+    ])
+    sol2 = solve(prob2)
+    @test sol2[compiled.q_over][end] ≈ 0.0 atol = 1.0e-10
+    @test sol2[compiled.w_liq_1_new][end] ≈ 0.2 rtol = 1.0e-6
+
+    # Case 3: With snow, all liquid becomes runoff
+    prob3 = remake(prob; p = [
+        compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.3,
+        compiled.q_seva => 0.1, compiled.has_snow => 1.0,
+    ])
+    sol3 = solve(prob3)
+    @test sol3[compiled.q_over][end] ≈ 0.3 rtol = 1.0e-6
+end
+
+@testitem "ImperviousRunoff - Qualitative Behavior" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = ImperviousRunoff()
+    compiled = mtkcompile(sys)
+
+    # Higher precipitation rate should give more runoff
+    prob = ODEProblem(compiled, [
+        compiled.w_liq_1 => 0.5, compiled.q_liq_0 => 0.1,
+        compiled.q_seva => 0.0, compiled.has_snow => 0.0,
+    ], (0.0, 1.0))
+
+    q_vals = [0.5, 1.0, 2.0, 5.0]
+    runoffs = Float64[]
+    for q in q_vals
+        p = remake(prob; p = [compiled.q_liq_0 => q])
+        s = solve(p)
+        push!(runoffs, s[compiled.q_over][end])
+    end
+    for i in 2:length(runoffs)
+        @test runoffs[i] >= runoffs[i - 1]
+    end
+end
+
+# ============================================================================
+# InterfaceHydraulicConductivity Tests
+# ============================================================================
+
+@testitem "InterfaceHydraulicConductivity - Structural Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = InterfaceHydraulicConductivity()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
+    @test "k_h" in unk_names
+
+    param_names = Set(string(Symbolics.tosymbol(p, escape = false)) for p in parameters(sys))
+    @test "k_sat_h" in param_names
+    @test "θ_upper" in param_names
+    @test "θ_lower" in param_names
+    @test "θ_sat_upper" in param_names
+    @test "θ_sat_lower" in param_names
+    @test "B_i" in param_names
+    @test "f_frz_upper" in param_names
+    @test "f_frz_lower" in param_names
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "InterfaceHydraulicConductivity - Equation Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = InterfaceHydraulicConductivity()
+    compiled = mtkcompile(sys)
+
+    # Test 1: At saturation, no freezing
+    # k_h = (1 - 0) * k_sat * (θ_sat / θ_sat)^(2B+3) = k_sat * 1 = k_sat
+    k_sat = 1.0e-5
+    θ_sat = 0.4
+    B = 6.0
+    prob = ODEProblem(compiled, [
+        compiled.k_sat_h => k_sat, compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
+        compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
+        compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
+    ], (0.0, 1.0))
+    sol = solve(prob)
+    @test sol[compiled.k_h][end] ≈ k_sat rtol = 1.0e-6
+
+    # Test 2: Half saturation, no freezing
+    # θ_avg = 0.2, θ_sat_avg = 0.4 => ratio = 0.5
+    # k_h = k_sat * 0.5^(2*6+3) = k_sat * 0.5^15
+    θ_half = 0.2
+    expected = k_sat * (θ_half / θ_sat)^(2 * B + 3)
+    prob2 = remake(prob; p = [compiled.θ_upper => θ_half, compiled.θ_lower => θ_half])
+    sol2 = solve(prob2)
+    @test sol2[compiled.k_h][end] ≈ expected rtol = 1.0e-4
+
+    # Test 3: Full freezing eliminates conductivity
+    prob3 = remake(prob; p = [compiled.f_frz_upper => 1.0, compiled.f_frz_lower => 1.0])
+    sol3 = solve(prob3)
+    @test sol3[compiled.k_h][end] ≈ 0.0 atol = 1.0e-15
+
+    # Test 4: Partial freezing reduces conductivity
+    prob4 = remake(prob; p = [compiled.f_frz_upper => 0.5, compiled.f_frz_lower => 0.5])
+    sol4 = solve(prob4)
+    @test sol4[compiled.k_h][end] ≈ 0.5 * k_sat rtol = 1.0e-6
+end
+
+@testitem "InterfaceHydraulicConductivity - Qualitative Behavior" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = InterfaceHydraulicConductivity()
+    compiled = mtkcompile(sys)
+
+    k_sat = 1.0e-5
+    θ_sat = 0.4
+    B = 6.0
+
+    prob = ODEProblem(compiled, [
+        compiled.k_sat_h => k_sat, compiled.θ_upper => 0.1, compiled.θ_lower => 0.1,
+        compiled.θ_sat_upper => θ_sat, compiled.θ_sat_lower => θ_sat,
+        compiled.B_i => B, compiled.f_frz_upper => 0.0, compiled.f_frz_lower => 0.0,
+    ], (0.0, 1.0))
+
+    # Higher water content should give higher conductivity
+    θ_vals = [0.1, 0.2, 0.3, 0.4]
+    k_vals = Float64[]
+    for θ in θ_vals
+        p = remake(prob; p = [compiled.θ_upper => θ, compiled.θ_lower => θ])
+        s = solve(p)
+        push!(k_vals, s[compiled.k_h][end])
+    end
+    for i in 2:length(k_vals)
+        @test k_vals[i] > k_vals[i - 1]
+    end
+
+    # Higher frozen fraction should reduce conductivity
+    f_vals = [0.0, 0.25, 0.5, 0.75, 1.0]
+    k_frz = Float64[]
+    for f in f_vals
+        p = remake(prob; p = [
+            compiled.θ_upper => θ_sat, compiled.θ_lower => θ_sat,
+            compiled.f_frz_upper => f, compiled.f_frz_lower => f,
+        ])
+        s = solve(p)
+        push!(k_frz, s[compiled.k_h][end])
+    end
+    for i in 2:length(k_frz)
+        @test k_frz[i] <= k_frz[i - 1]
+    end
+end
+
+# ============================================================================
+# SoilWaterContentCalc Tests
+# ============================================================================
+
+@testitem "SoilWaterContentCalc - Structural Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = SoilWaterContentCalc()
+
+    @test length(equations(sys)) == 1
+    @test length(unknowns(sys)) == 1
+
+    unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
+    @test "θ_i" in unk_names
+
+    param_names = Set(string(Symbolics.tosymbol(p, escape = false)) for p in parameters(sys))
+    @test "w_liq" in param_names
+    @test "w_ice" in param_names
+    @test "Δz" in param_names
+
+    compiled = mtkcompile(sys)
+    @test compiled isa ModelingToolkit.AbstractSystem
+end
+
+@testitem "SoilWaterContentCalc - Equation Verification" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = SoilWaterContentCalc()
+    compiled = mtkcompile(sys)
+
+    # θ_i = w_liq/(Δz*ρ_liq) + w_ice/(Δz*ρ_ice)
+    # For w_liq = 20 kg/m^2, w_ice = 10 kg/m^2, Δz = 0.5 m:
+    # θ_i = 20/(0.5*1000) + 10/(0.5*917) = 0.04 + 0.02182 = 0.06182
+    prob = ODEProblem(compiled, [compiled.w_liq => 20.0, compiled.w_ice => 10.0, compiled.Δz => 0.5], (0.0, 1.0))
+    sol = solve(prob)
+    expected = 20.0 / (0.5 * 1000.0) + 10.0 / (0.5 * 917.0)
+    @test sol[compiled.θ_i][end] ≈ expected rtol = 1.0e-6
+
+    # Pure liquid case
+    prob2 = remake(prob; p = [compiled.w_liq => 50.0, compiled.w_ice => 0.0, compiled.Δz => 1.0])
+    sol2 = solve(prob2)
+    @test sol2[compiled.θ_i][end] ≈ 50.0 / (1.0 * 1000.0) rtol = 1.0e-6
+
+    # Pure ice case
+    prob3 = remake(prob; p = [compiled.w_liq => 0.0, compiled.w_ice => 50.0, compiled.Δz => 1.0])
+    sol3 = solve(prob3)
+    @test sol3[compiled.θ_i][end] ≈ 50.0 / (1.0 * 917.0) rtol = 1.0e-6
+end
+
+@testitem "SoilWaterContentCalc - Qualitative Behavior" setup = [HydrologySetup] tags = [:hydrology] begin
+    sys = SoilWaterContentCalc()
+    compiled = mtkcompile(sys)
+
+    prob = ODEProblem(compiled, [compiled.w_liq => 10.0, compiled.w_ice => 5.0, compiled.Δz => 0.5], (0.0, 1.0))
+
+    # More liquid water should give higher θ
+    wl_vals = [5.0, 10.0, 20.0, 40.0]
+    θ_vals = Float64[]
+    for wl in wl_vals
+        p = remake(prob; p = [compiled.w_liq => wl])
+        s = solve(p)
+        push!(θ_vals, s[compiled.θ_i][end])
+    end
+    for i in 2:length(θ_vals)
+        @test θ_vals[i] > θ_vals[i - 1]
+    end
+
+    # Thicker layer with same mass should give lower θ
+    dz_vals = [0.1, 0.5, 1.0, 2.0]
+    θ_dz = Float64[]
+    for dz in dz_vals
+        p = remake(prob; p = [compiled.Δz => dz])
+        s = solve(p)
+        push!(θ_dz, s[compiled.θ_i][end])
+    end
+    for i in 2:length(θ_dz)
+        @test θ_dz[i] < θ_dz[i - 1]
+    end
+end

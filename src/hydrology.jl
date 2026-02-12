@@ -2,7 +2,8 @@ export SnowDensity, SnowIceContent, SnowWaterContent, SnowCompaction,
     SnowLayerCombination, SoilHydraulicProperties, SurfaceRunoffInfiltration,
     SoilWaterFlux, SoilWaterEquilibrium, RichardsEquation, GroundwaterDrainage,
     WaterTableDepth, AquiferWaterBalance, SnowCappingRunoff, SurfaceLayerUpdate,
-    PerviousRoadWaterBalance, ImperviousWaterBalance
+    PerviousRoadWaterBalance, ImperviousWaterBalance,
+    ImperviousRunoff, InterfaceHydraulicConductivity, SoilWaterContentCalc
 
 using MethodOfLines
 using DomainSets
@@ -964,6 +965,149 @@ no sub-surface drainage, and intercept both liquid and solid precipitation.
 
         # Eqs. 5.2-5.3: Water balance for roof/impervious road
         water_input ~ q_rain + q_sno - E_surface - q_over - q_rgwl - q_snwcp_ice,
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    ImperviousRunoff(; name=:ImperviousRunoff)
+
+Computes surface runoff for roof and impervious road surfaces, following
+Eqs. 5.47–5.48 of Oleson et al. (2010).
+
+These surfaces have limited water storage capacity. When no snow layers are
+present (snl = 0), runoff equals the excess water above the ponding limit
+w_pond_max = 1 kg/m². When snow layers exist (snl < 0), all liquid water
+reaching the surface becomes runoff.
+
+After runoff, the surface liquid water content is updated:
+- If runoff occurs: w_liq_1 is set to the ponding limit (Eq. 5.48, case 1)
+- If no runoff: w_liq_1 is updated with net input (Eq. 5.48, case 2)
+
+**Reference**: Oleson et al. (2010), Chapter 5, Section 5.2, Eqs. 5.47–5.48, pp. 124–125.
+"""
+@component function ImperviousRunoff(; name = :ImperviousRunoff)
+
+    @constants begin
+        w_pond_max = 1.0, [description = "Maximum ponding limit (p. 112)", unit = u"kg/m^2"]
+        zero_kgpm2s = 0.0, [description = "Zero flux", unit = u"kg/(m^2*s)"]
+        zero_kgpm2 = 0.0, [description = "Zero mass per area", unit = u"kg/m^2"]
+        one_s = 1.0, [description = "Unit time for rate conversion", unit = u"s"]
+    end
+
+    @parameters begin
+        w_liq_1, [description = "Liquid water on surface", unit = u"kg/m^2"]
+        q_liq_0, [description = "Liquid water reaching surface from rain/snowmelt", unit = u"kg/(m^2*s)"]
+        q_seva, [description = "Surface evaporation of liquid water", unit = u"kg/(m^2*s)"]
+        has_snow, [description = "Whether snow layers are present (1=yes, 0=no) (dimensionless)"]
+    end
+
+    @variables begin
+        q_over_nosnow(t), [description = "Surface runoff without snow (Eq. 5.47, case 1)", unit = u"kg/(m^2*s)"]
+        q_over(t), [description = "Surface runoff (Eq. 5.47)", unit = u"kg/(m^2*s)"]
+        w_liq_1_new(t), [description = "Updated surface liquid water content (Eq. 5.48)", unit = u"kg/m^2"]
+    end
+
+    eqs = [
+        # Eq. 5.47 (no snow case): q_over = max(0, w_liq_1/Δt + q_liq_0 - q_seva - w_pond_max/Δt)
+        q_over_nosnow ~ max(zero_kgpm2s, w_liq_1 / one_s + q_liq_0 - q_seva - w_pond_max / one_s),
+
+        # Eq. 5.47: Surface runoff for roof/impervious road
+        # With snow: q_over = q_liq_0
+        q_over ~ ifelse(has_snow > 0.5, q_liq_0, q_over_nosnow),
+
+        # Eq. 5.48: Updated surface liquid water content
+        w_liq_1_new ~ ifelse(
+            has_snow > 0.5,
+            w_liq_1,
+            ifelse(
+                q_over_nosnow > zero_kgpm2s,
+                w_pond_max,
+                max(w_liq_1 + (q_liq_0 - q_seva) * one_s, zero_kgpm2)
+            )
+        ),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    InterfaceHydraulicConductivity(; name=:InterfaceHydraulicConductivity)
+
+Computes the hydraulic conductivity at the interface between two soil layers,
+following Eq. 5.69 of Oleson et al. (2010).
+
+The interface conductivity accounts for averaging of water content and porosity
+between adjacent layers, Clapp-Hornberger power-law dependence on saturation,
+and reduction due to frozen soil (impermeable fraction).
+
+For interfaces between two layers (i = 1, ..., N_levsoi - 1):
+  k[z_h,i] = (1 - (f_frz,i + f_frz,i+1)/2) * k_sat[z_h,i] *
+             [0.5*(θ_i + θ_{i+1}) / (0.5*(θ_sat,i + θ_sat,i+1))]^(2B_i+3)
+
+**Reference**: Oleson et al. (2010), Chapter 5, Section 5.3.1, Eq. 5.69, p. 131.
+"""
+@component function InterfaceHydraulicConductivity(; name = :InterfaceHydraulicConductivity)
+
+    @parameters begin
+        k_sat_h, [description = "Saturated hydraulic conductivity at interface (Eq. 5.70)", unit = u"m/s"]
+        θ_upper, [description = "Volumetric water content of upper layer", unit = u"m^3/m^3"]
+        θ_lower, [description = "Volumetric water content of lower layer", unit = u"m^3/m^3"]
+        θ_sat_upper, [description = "Porosity of upper layer", unit = u"m^3/m^3"]
+        θ_sat_lower, [description = "Porosity of lower layer", unit = u"m^3/m^3"]
+        B_i, [description = "Clapp-Hornberger exponent of upper layer (dimensionless)"]
+        f_frz_upper, [description = "Impermeable fraction of upper layer (dimensionless)"]
+        f_frz_lower, [description = "Impermeable fraction of lower layer (dimensionless)"]
+    end
+
+    @variables begin
+        k_h(t), [description = "Hydraulic conductivity at interface (Eq. 5.69)", unit = u"m/s"]
+    end
+
+    eqs = [
+        # Eq. 5.69: Interface hydraulic conductivity
+        k_h ~ (1.0 - (f_frz_upper + f_frz_lower) / 2.0) * k_sat_h *
+            (0.5 * (θ_upper + θ_lower) / (0.5 * (θ_sat_upper + θ_sat_lower)))^(2.0 * B_i + 3.0),
+    ]
+
+    return System(eqs, t; name)
+end
+
+
+"""
+    SoilWaterContentCalc(; name=:SoilWaterContentCalc)
+
+Computes the total volumetric soil water content from liquid water and ice
+masses, following Eq. 5.137 of Oleson et al. (2010).
+
+The total volumetric water content combines both liquid and ice phases:
+  θ_i = w_liq,i / (Δz_i * ρ_liq) + w_ice,i / (Δz_i * ρ_ice)
+
+**Reference**: Oleson et al. (2010), Chapter 5, Section 5.3.2, Eq. 5.137, p. 141.
+"""
+@component function SoilWaterContentCalc(; name = :SoilWaterContentCalc)
+
+    @constants begin
+        ρ_liq = 1000.0, [description = "Density of liquid water (Table 1.4)", unit = u"kg/m^3"]
+        ρ_ice = 917.0, [description = "Density of ice (Table 1.4)", unit = u"kg/m^3"]
+    end
+
+    @parameters begin
+        w_liq, [description = "Mass of liquid water in soil layer", unit = u"kg/m^2"]
+        w_ice, [description = "Mass of ice in soil layer", unit = u"kg/m^2"]
+        Δz, [description = "Soil layer thickness", unit = u"m"]
+    end
+
+    @variables begin
+        θ_i(t), [description = "Total volumetric soil water content (Eq. 5.137)", unit = u"m^3/m^3"]
+    end
+
+    eqs = [
+        # Eq. 5.137: Total volumetric water content
+        θ_i ~ w_liq / (Δz * ρ_liq) + w_ice / (Δz * ρ_ice),
     ]
 
     return System(eqs, t; name)
