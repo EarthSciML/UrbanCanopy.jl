@@ -91,8 +91,6 @@ Boulder, CO, 168 pp.
     @constants begin
         sqrt2_inv = 1.0 / sqrt(2.0), [description = "1/√2 for wind decomposition (dimensionless)"]
         z_prime_atm_val = 30.0, [description = "Atmospheric reference height (p.149)", unit = u"m"]
-        zero_Wm2 = 0.0, [description = "Zero radiation", unit = u"W/m^2"]
-        zero_precip = 0.0, [description = "Zero precipitation rate", unit = u"kg/(m^2*s)"]
     end
 
     # Raw atmospheric forcing inputs
