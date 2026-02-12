@@ -18,12 +18,12 @@ end
     # Verify key unknown names
     unk_names = Set(string(Symbolics.tosymbol(v, escape = false)) for v in unknowns(sys))
     for name in [
-        "R_vis_raw", "R_nir_raw", "R_vis", "R_nir",
-        "S_atm_dir_vis", "S_atm_dir_nir", "S_atm_dif_vis", "S_atm_dif_nir",
-        "e_atm", "L_atm_down",
-        "f_P_raw", "f_P", "q_rain", "q_snow",
-        "u_atm", "v_atm", "θ_atm", "z_prime_atm",
-    ]
+            "R_vis_raw", "R_nir_raw", "R_vis", "R_nir",
+            "S_atm_dir_vis", "S_atm_dir_nir", "S_atm_dif_vis", "S_atm_dif_nir",
+            "e_atm", "L_atm_down",
+            "f_P_raw", "f_P", "q_rain", "q_snow",
+            "u_atm", "v_atm", "θ_atm", "z_prime_atm",
+        ]
         @test name in unk_names
     end
 
@@ -96,10 +96,10 @@ end
     vis_flux = α * S_val  # 250
     nir_flux = (1 - α) * S_val  # 250
 
-    R_vis_expected = 0.17639 + 0.00380 * vis_flux +
-                     (-9.0039e-6) * vis_flux^2 + 8.1351e-9 * vis_flux^3
+    R_vis_expected = 0.17639 + 0.0038 * vis_flux +
+        (-9.0039e-6) * vis_flux^2 + 8.1351e-9 * vis_flux^3
     R_nir_expected = 0.29548 + 0.00504 * nir_flux +
-                     (-1.4957e-5) * nir_flux^2 + 1.4881e-8 * nir_flux^3
+        (-1.4957e-5) * nir_flux^2 + 1.4881e-8 * nir_flux^3
 
     prob = ODEProblem(
         compiled,
@@ -115,8 +115,8 @@ end
     )
     sol = solve(prob)
 
-    @test sol[compiled.R_vis][end] ≈ R_vis_expected rtol = 1e-10
-    @test sol[compiled.R_nir][end] ≈ R_nir_expected rtol = 1e-10
+    @test sol[compiled.R_vis][end] ≈ R_vis_expected rtol = 1.0e-10
+    @test sol[compiled.R_nir][end] ≈ R_nir_expected rtol = 1.0e-10
 
     # Verify R values are within physical bounds
     @test 0.01 ≤ sol[compiled.R_vis][end] ≤ 0.99
@@ -145,8 +145,8 @@ end
     sol_zero = solve(prob_zero)
 
     # At S_atm = 0: R_vis_raw = a_0 = 0.17639, R_nir_raw = b_0 = 0.29548
-    @test sol_zero[compiled.R_vis][end] ≈ 0.17639 rtol = 1e-10
-    @test sol_zero[compiled.R_nir][end] ≈ 0.29548 rtol = 1e-10
+    @test sol_zero[compiled.R_vis][end] ≈ 0.17639 rtol = 1.0e-10
+    @test sol_zero[compiled.R_nir][end] ≈ 0.29548 rtol = 1.0e-10
 
     # Very high solar radiation - test that clamping works
     prob_high = remake(prob_zero; p = [compiled.S_atm => 2000.0])
@@ -181,13 +181,13 @@ end
     dif_nir = sol[compiled.S_atm_dif_nir][end]
 
     # Energy conservation: sum of all 4 components should equal S_atm
-    @test dir_vis + dir_nir + dif_vis + dif_nir ≈ S_val rtol = 1e-10
+    @test dir_vis + dir_nir + dif_vis + dif_nir ≈ S_val rtol = 1.0e-10
 
     # Visible components should sum to α * S_atm = 0.5 * S_atm
-    @test dir_vis + dif_vis ≈ 0.5 * S_val rtol = 1e-10
+    @test dir_vis + dif_vis ≈ 0.5 * S_val rtol = 1.0e-10
 
     # NIR components should sum to (1-α) * S_atm = 0.5 * S_atm
-    @test dir_nir + dif_nir ≈ 0.5 * S_val rtol = 1e-10
+    @test dir_nir + dif_nir ≈ 0.5 * S_val rtol = 1.0e-10
 
     # All components should be non-negative
     @test dir_vis ≥ 0
@@ -215,10 +215,10 @@ end
     )
     sol = solve(prob)
 
-    @test sol[compiled.S_atm_dir_vis][end] ≈ 0.0 atol = 1e-15
-    @test sol[compiled.S_atm_dir_nir][end] ≈ 0.0 atol = 1e-15
-    @test sol[compiled.S_atm_dif_vis][end] ≈ 0.0 atol = 1e-15
-    @test sol[compiled.S_atm_dif_nir][end] ≈ 0.0 atol = 1e-15
+    @test sol[compiled.S_atm_dir_vis][end] ≈ 0.0 atol = 1.0e-15
+    @test sol[compiled.S_atm_dir_nir][end] ≈ 0.0 atol = 1.0e-15
+    @test sol[compiled.S_atm_dif_vis][end] ≈ 0.0 atol = 1.0e-15
+    @test sol[compiled.S_atm_dif_nir][end] ≈ 0.0 atol = 1.0e-15
 end
 
 @testitem "Eq. 6.10 - Vapor Pressure" setup = [OfflineModeSetup] tags = [:offline_mode] begin
@@ -248,12 +248,12 @@ end
     )
     sol = solve(prob)
 
-    @test sol[compiled.e_atm][end] ≈ e_expected rtol = 1e-10
+    @test sol[compiled.e_atm][end] ≈ e_expected rtol = 1.0e-10
 
     # Dry air: q_atm = 0 → e_atm = 0
     prob_dry = remake(prob; p = [compiled.q_atm => 0.0])
     sol_dry = solve(prob_dry)
-    @test sol_dry[compiled.e_atm][end] ≈ 0.0 atol = 1e-15
+    @test sol_dry[compiled.e_atm][end] ≈ 0.0 atol = 1.0e-15
 end
 
 @testitem "Eq. 6.9 - Longwave Radiation" setup = [OfflineModeSetup] tags = [:offline_mode] begin
@@ -268,7 +268,7 @@ end
     ε = 0.018016 / 0.028966
     e = P * q / (ε + (1 - ε) * q)
 
-    L_expected = (0.70 + 5.95e-5 * 0.01 * e * exp(1500.0 / T)) * σ * T^4
+    L_expected = (0.7 + 5.95e-5 * 0.01 * e * exp(1500.0 / T)) * σ * T^4
 
     prob = ODEProblem(
         compiled,
@@ -284,7 +284,7 @@ end
     )
     sol = solve(prob)
 
-    @test sol[compiled.L_atm_down][end] ≈ L_expected rtol = 1e-8
+    @test sol[compiled.L_atm_down][end] ≈ L_expected rtol = 1.0e-8
 
     # Longwave radiation should always be positive
     @test sol[compiled.L_atm_down][end] > 0
@@ -304,7 +304,7 @@ end
     sys = OfflineModeForcing()
     compiled = mtkcompile(sys)
 
-    P_val = 1e-3  # 1 mm/s precipitation rate
+    P_val = 1.0e-3  # 1 mm/s precipitation rate
 
     prob = ODEProblem(
         compiled,
@@ -321,19 +321,19 @@ end
     sol = solve(prob)
 
     # Conservation: q_rain + q_snow = P_precip
-    @test sol[compiled.q_rain][end] + sol[compiled.q_snow][end] ≈ P_val rtol = 1e-10
+    @test sol[compiled.q_rain][end] + sol[compiled.q_snow][end] ≈ P_val rtol = 1.0e-10
 
     # At T = T_f + 1 K: f_P = 0.5 * 1 = 0.5
-    @test sol[compiled.f_P][end] ≈ 0.5 rtol = 1e-10
-    @test sol[compiled.q_rain][end] ≈ 0.5 * P_val rtol = 1e-10
-    @test sol[compiled.q_snow][end] ≈ 0.5 * P_val rtol = 1e-10
+    @test sol[compiled.f_P][end] ≈ 0.5 rtol = 1.0e-10
+    @test sol[compiled.q_rain][end] ≈ 0.5 * P_val rtol = 1.0e-10
+    @test sol[compiled.q_snow][end] ≈ 0.5 * P_val rtol = 1.0e-10
 end
 
 @testitem "Eq. 6.13 - Rain Fraction Limiting Cases" setup = [OfflineModeSetup] tags = [:offline_mode] begin
     sys = OfflineModeForcing()
     compiled = mtkcompile(sys)
 
-    P_val = 1e-3
+    P_val = 1.0e-3
     base_params = Dict(
         compiled.S_atm => 0.0,
         compiled.P_atm => 101325.0,
@@ -345,27 +345,27 @@ end
     # Well below freezing: T_atm = 263.15 K (T_f - 10) → f_P = clamp(0.5*(-10), 0, 1) = 0 → all snow
     prob_cold = ODEProblem(compiled, merge(base_params, Dict(compiled.T_atm => 263.15)), (0.0, 1.0))
     sol_cold = solve(prob_cold)
-    @test sol_cold[compiled.f_P][end] ≈ 0.0 atol = 1e-15
-    @test sol_cold[compiled.q_snow][end] ≈ P_val rtol = 1e-10
-    @test sol_cold[compiled.q_rain][end] ≈ 0.0 atol = 1e-15
+    @test sol_cold[compiled.f_P][end] ≈ 0.0 atol = 1.0e-15
+    @test sol_cold[compiled.q_snow][end] ≈ P_val rtol = 1.0e-10
+    @test sol_cold[compiled.q_rain][end] ≈ 0.0 atol = 1.0e-15
 
     # At freezing: T_atm = T_f = 273.15 K → f_P = clamp(0, 0, 1) = 0 → all snow
     prob_freeze = ODEProblem(compiled, merge(base_params, Dict(compiled.T_atm => 273.15)), (0.0, 1.0))
     sol_freeze = solve(prob_freeze)
-    @test sol_freeze[compiled.f_P][end] ≈ 0.0 atol = 1e-10
-    @test sol_freeze[compiled.q_snow][end] ≈ P_val rtol = 1e-10
+    @test sol_freeze[compiled.f_P][end] ≈ 0.0 atol = 1.0e-10
+    @test sol_freeze[compiled.q_snow][end] ≈ P_val rtol = 1.0e-10
 
     # Well above freezing: T_atm = 283.15 K (T_f + 10) → f_P = clamp(0.5*10, 0, 1) = 1 → all rain
     prob_warm = ODEProblem(compiled, merge(base_params, Dict(compiled.T_atm => 283.15)), (0.0, 1.0))
     sol_warm = solve(prob_warm)
-    @test sol_warm[compiled.f_P][end] ≈ 1.0 atol = 1e-10
-    @test sol_warm[compiled.q_rain][end] ≈ P_val rtol = 1e-10
-    @test sol_warm[compiled.q_snow][end] ≈ 0.0 atol = 1e-15
+    @test sol_warm[compiled.f_P][end] ≈ 1.0 atol = 1.0e-10
+    @test sol_warm[compiled.q_rain][end] ≈ P_val rtol = 1.0e-10
+    @test sol_warm[compiled.q_snow][end] ≈ 0.0 atol = 1.0e-15
 
     # At T_f + 2 K → f_P = clamp(0.5*2, 0, 1) = 1 → just at the transition
     prob_trans = ODEProblem(compiled, merge(base_params, Dict(compiled.T_atm => 275.15)), (0.0, 1.0))
     sol_trans = solve(prob_trans)
-    @test sol_trans[compiled.f_P][end] ≈ 1.0 atol = 1e-10
+    @test sol_trans[compiled.f_P][end] ≈ 1.0 atol = 1.0e-10
 end
 
 @testitem "Wind Decomposition and Derived Variables" setup = [OfflineModeSetup] tags = [:offline_mode] begin
@@ -391,17 +391,17 @@ end
 
     # u_atm = v_atm = W_atm / √2
     expected_uv = W_val / sqrt(2.0)
-    @test sol[compiled.u_atm][end] ≈ expected_uv rtol = 1e-10
-    @test sol[compiled.v_atm][end] ≈ expected_uv rtol = 1e-10
+    @test sol[compiled.u_atm][end] ≈ expected_uv rtol = 1.0e-10
+    @test sol[compiled.v_atm][end] ≈ expected_uv rtol = 1.0e-10
 
     # u² + v² should equal W²
-    @test sol[compiled.u_atm][end]^2 + sol[compiled.v_atm][end]^2 ≈ W_val^2 rtol = 1e-10
+    @test sol[compiled.u_atm][end]^2 + sol[compiled.v_atm][end]^2 ≈ W_val^2 rtol = 1.0e-10
 
     # θ_atm = T_atm
-    @test sol[compiled.θ_atm][end] ≈ T_val rtol = 1e-10
+    @test sol[compiled.θ_atm][end] ≈ T_val rtol = 1.0e-10
 
     # z_prime_atm = 30 m
-    @test sol[compiled.z_prime_atm][end] ≈ 30.0 rtol = 1e-10
+    @test sol[compiled.z_prime_atm][end] ≈ 30.0 rtol = 1.0e-10
 end
 
 @testitem "Qualitative Properties" setup = [OfflineModeSetup] tags = [:offline_mode] begin
@@ -414,7 +414,7 @@ end
         compiled.P_atm => 101325.0,
         compiled.q_atm => 0.01,
         compiled.W_atm => 5.0,
-        compiled.P_precip => 1e-4,
+        compiled.P_precip => 1.0e-4,
     )
 
     prob = ODEProblem(compiled, base_params, (0.0, 1.0))
@@ -444,5 +444,5 @@ end
     # Direct fraction should generally increase with solar intensity (more clear-sky)
     # This is a qualitative property of the polynomial fits
     @test sol_high_S[compiled.R_vis][end] > sol[compiled.R_vis][end] ||
-          sol_high_S[compiled.R_vis][end] ≈ sol[compiled.R_vis][end]
+        sol_high_S[compiled.R_vis][end] ≈ sol[compiled.R_vis][end]
 end

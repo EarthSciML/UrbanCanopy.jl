@@ -54,7 +54,7 @@ Boulder, CO, 168 pp.
     # Polynomial coefficients for visible direct fraction (Eq. 6.7)
     @constants begin
         a_0 = 0.17639, [description = "Visible direct fraction polynomial coefficient a_0 (Eq. 6.7) (dimensionless)"]
-        a_1 = 0.00380, [description = "Visible direct fraction polynomial coefficient a_1 (Eq. 6.7)", unit = u"m^2/W"]
+        a_1 = 0.0038, [description = "Visible direct fraction polynomial coefficient a_1 (Eq. 6.7)", unit = u"m^2/W"]
         a_2 = -9.0039e-6, [description = "Visible direct fraction polynomial coefficient a_2 (Eq. 6.7)", unit = u"m^4/W^2"]
         a_3 = 8.1351e-9, [description = "Visible direct fraction polynomial coefficient a_3 (Eq. 6.7)", unit = u"m^6/W^3"]
     end
@@ -69,7 +69,7 @@ Boulder, CO, 168 pp.
 
     # Idso (1981) longwave radiation constants (Eq. 6.9)
     @constants begin
-        idso_base = 0.70, [description = "Idso base emissivity factor (Eq. 6.9) (dimensionless)"]
+        idso_base = 0.7, [description = "Idso base emissivity factor (Eq. 6.9) (dimensionless)"]
         idso_coeff = 5.95e-7, [description = "Idso vapor pressure coefficient 5.95e-5 * 0.01 (Eq. 6.9)", unit = u"Pa^-1"]
         idso_T_ref = 1500.0, [description = "Idso temperature reference (Eq. 6.9)", unit = u"K"]
     end
@@ -149,8 +149,8 @@ Boulder, CO, 168 pp.
         # Eq. 6.8 - Ratio of direct to total in NIR (polynomial fit)
         # R_nir = b_0 + b_1*(1-α)*S_atm + b_2*[(1-α)*S_atm]^2 + b_3*[(1-α)*S_atm]^3
         R_nir_raw ~ b_0 + b_1 * ((one_dimless - α_vis) * S_atm) +
-                    b_2 * ((one_dimless - α_vis) * S_atm)^2 +
-                    b_3 * ((one_dimless - α_vis) * S_atm)^3,
+            b_2 * ((one_dimless - α_vis) * S_atm)^2 +
+            b_3 * ((one_dimless - α_vis) * S_atm)^3,
 
         # Clamp R_vis and R_nir to [0.01, 0.99]
         R_vis ~ max(R_min, min(R_max, R_vis_raw)),
