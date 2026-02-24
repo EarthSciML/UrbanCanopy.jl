@@ -182,7 +182,7 @@ end
 gif(anim, fps=2)
 ```
 
-### GEOS-FP Coupled Simulation: Urban Heat Island
+### GEOS-FP Coupled System
 
 The `UrbanCanopyModel` can be coupled to GEOS-FP reanalysis data via the
 `EarthSciDataExt` package extension. This coupling automatically maps GEOS-FP
@@ -191,14 +191,10 @@ derived quantities (Monin-Obukhov stability, solar zenith angle) from GEOS-FP
 friction velocity, sensible heat flux, latitude, longitude, and time.
 
 The following example creates a coupled system over a domain spanning part of
-the continental United States, solves it using Strang operator splitting over
-a spatial grid, and visualizes the urban heat island intensity as the difference
-between the urban canopy layer air temperature (T\_ac) and the GEOS-FP 2-meter
-atmospheric temperature (T\_atm).
+the continental United States and inspects the coupling equations.
 
 ```@example ucm
 using EarthSciData, EarthSciMLBase, Dates
-using OrdinaryDiffEqTsit5, OrdinaryDiffEqLowOrderRK
 
 domain = DomainInfo(
     DateTime(2016, 5, 1),
@@ -211,48 +207,44 @@ domain = DomainInfo(
 csys = couple(
     UrbanCanopyModel(),
     GEOSFP("4x5", domain),
+    domain,
 )
 
-st = SolverStrangThreads(Tsit5(), 1.0)
-prob = ODEProblem(csys, st)
-sol = solve(prob, Euler(); dt = 1.0)
+coupled_sys = convert(System, csys)
 nothing # hide
 ```
 
-#### Urban Heat Island Heatmap Animation
+#### Coupling Equations
 
-Below we animate the spatial distribution of the urban canopy layer air
-temperature (T\_ac) and the urban-atmospheric temperature difference
-(T\_ac − T\_atm) over time. Positive values of the difference indicate
-an urban heat island effect where the canopy air is warmer than the background
-atmosphere.
+The coupling creates observed equations that map GEOS-FP meteorological
+variables to the `UrbanCanopyModel` forcing parameters. Below we extract
+the top-level coupling equations showing how each GEOS-FP field drives the
+urban canopy model.
 
 ```@example ucm
-# Find the variable indices for T_ac and T_atm in the compiled system
-compiled_sys = convert(System, csys)
-var_names = string.(Symbolics.tosymbol.(unknowns(compiled_sys), escape=false))
-i_Tac = findfirst(v -> occursin("T_ac", v), var_names)
-i_Tatm = findfirst(v -> occursin("T_atm", v), var_names)
+obs = observed(coupled_sys)
 
-lon_grid = rad2deg.(range(deg2rad(-115), deg2rad(-68.75); step=deg2rad(2.5)))
-lat_grid = rad2deg.(range(deg2rad(25), deg2rad(53.7); step=deg2rad(2)))
-
-anim = @animate for i in 1:length(sol.u)
-    u = reshape(sol.u[i], :, size(domain)...)
-    T_ac_map = u[i_Tac, :, :, 1]
-    T_atm_map = u[i_Tatm, :, :, 1]
-    ΔT = T_ac_map .- T_atm_map
-
-    p1 = heatmap(lon_grid, lat_grid, T_ac_map',
-        xlabel="Longitude (°)", ylabel="Latitude (°)",
-        title="T_ac (K)", color=:thermal,
-        clims=(280.0, 320.0))
-    p2 = heatmap(lon_grid, lat_grid, ΔT',
-        xlabel="Longitude (°)", ylabel="Latitude (°)",
-        title="T_ac − T_atm (K)", color=:RdBu_r,
-        clims=(-10.0, 10.0))
-    plot(p1, p2, layout=(1, 2), size=(900, 400))
+# Extract the top-level coupling equations (UrbanCanopyModel parameters driven by GEOS-FP)
+coupling_terms = ["S_atm", "T_atm", "P_atm", "q_atm", "W_atm", "P_precip", "ζ_in", "μ_zen"]
+coupling_eqs = filter(obs) do eq
+    lhs_str = string(eq.lhs)
+    occursin("UrbanCanopyModel", lhs_str) &&
+        count("₊", lhs_str) == 1 &&
+        any(term -> occursin(term, lhs_str), coupling_terms)
 end
 
-gif(anim, fps=15)
+for eq in coupling_eqs
+    println(eq)
+end
+```
+
+#### Coupled System Variables
+
+```@example ucm
+coupled_vars = unknowns(coupled_sys)
+DataFrame(
+    :Name => [string(Symbolics.tosymbol(v, escape=false)) for v in coupled_vars],
+    :Units => [dimension(ModelingToolkit.get_unit(v)) for v in coupled_vars],
+    :Description => [ModelingToolkit.getdescription(v) for v in coupled_vars]
+)
 ```
