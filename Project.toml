@@ -7,7 +7,6 @@ authors = ["EarthSciML authors and contributors"]
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 EarthSciMLBase = "e53f1632-a13c-4728-9402-0c66d48804b0"
-MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 
 [weakdeps]
@@ -21,7 +20,6 @@ DomainSets = "0.7"
 DynamicQuantities = "1.4"
 EarthSciData = "0.14"
 EarthSciMLBase = "0.24"
-MethodOfLines = "0.11"
 ModelingToolkit = "10.20"
 OrdinaryDiffEqDefault = "1.2"
 julia = "1.10"
