@@ -34,6 +34,7 @@ function EarthSciMLBase.couple2(ucm::UrbanCanopyModelCoupler, g::GEOSFPCoupler)
         z_ref_cpl = 30.0, [unit = u"m", description = "Reference height"]
         ε_flux = 1.0e-4, [unit = u"W/m^2", description = "Min heat flux magnitude"]
         one_m_cpl = 1.0, [unit = u"m", description = "Unit length"]
+        one_s_precip = 1.0, [unit = u"s", description = "Unit time for PRECTOT unit correction (GEOS-FP metadata labels precipitation rate as kg/m²/s² instead of kg/m²/s)"]
     end
 
     # Compute Monin-Obukhov length from GEOS-FP USTAR and HFLUX
@@ -84,7 +85,7 @@ function EarthSciMLBase.couple2(ucm::UrbanCanopyModelCoupler, g::GEOSFPCoupler)
             u.P_atm ~ m.I3₊PS,
             u.q_atm ~ m.A1₊QV2M,
             u.W_atm ~ sqrt(m.A1₊U10M^2 + m.A1₊V10M^2),
-            u.P_precip ~ m.A1₊PRECTOT,
+            u.P_precip ~ m.A1₊PRECTOT * one_s_precip,  # GEOS-FP PRECTOT metadata has kg/m²/s² instead of kg/m²/s
             u.ζ_in ~ ζ_expr,
             u.μ_zen ~ μ_expr,
         ],

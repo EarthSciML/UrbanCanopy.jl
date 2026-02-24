@@ -181,3 +181,78 @@ end
 
 gif(anim, fps=2)
 ```
+
+### GEOS-FP Coupled Simulation: Urban Heat Island
+
+The `UrbanCanopyModel` can be coupled to GEOS-FP reanalysis data via the
+`EarthSciDataExt` package extension. This coupling automatically maps GEOS-FP
+surface meteorological fields to the model's forcing parameters and computes
+derived quantities (Monin-Obukhov stability, solar zenith angle) from GEOS-FP
+friction velocity, sensible heat flux, latitude, longitude, and time.
+
+The following example creates a coupled system over a domain spanning part of
+the continental United States, solves it using Strang operator splitting over
+a spatial grid, and visualizes the urban heat island intensity as the difference
+between the urban canopy layer air temperature (T\_ac) and the GEOS-FP 2-meter
+atmospheric temperature (T\_atm).
+
+```@example ucm
+using EarthSciData, EarthSciMLBase, Dates
+using OrdinaryDiffEqTsit5, OrdinaryDiffEqLowOrderRK
+
+domain = DomainInfo(
+    DateTime(2016, 5, 1),
+    DateTime(2016, 5, 4);
+    lonrange = deg2rad(-115):deg2rad(2.5):deg2rad(-68.75),
+    latrange = deg2rad(25):deg2rad(2):deg2rad(53.7),
+    levrange = 1:15,
+)
+
+csys = couple(
+    UrbanCanopyModel(),
+    GEOSFP("4x5", domain),
+)
+
+st = SolverStrangThreads(Tsit5(), 1.0)
+prob = ODEProblem(csys, st)
+sol = solve(prob, Euler(); dt = 1.0)
+nothing # hide
+```
+
+#### Urban Heat Island Heatmap Animation
+
+Below we animate the spatial distribution of the urban canopy layer air
+temperature (T\_ac) and the urban-atmospheric temperature difference
+(T\_ac − T\_atm) over time. Positive values of the difference indicate
+an urban heat island effect where the canopy air is warmer than the background
+atmosphere.
+
+```@example ucm
+# Find the variable indices for T_ac and T_atm in the compiled system
+compiled_sys = convert(System, csys)
+var_names = string.(Symbolics.tosymbol.(unknowns(compiled_sys), escape=false))
+i_Tac = findfirst(v -> occursin("T_ac", v), var_names)
+i_Tatm = findfirst(v -> occursin("T_atm", v), var_names)
+
+lon_grid = rad2deg.(range(deg2rad(-115), deg2rad(-68.75); step=deg2rad(2.5)))
+lat_grid = rad2deg.(range(deg2rad(25), deg2rad(53.7); step=deg2rad(2)))
+
+anim = @animate for i in 1:length(sol.u)
+    u = reshape(sol.u[i], :, size(domain)...)
+    T_ac_map = u[i_Tac, :, :, 1]
+    T_atm_map = u[i_Tatm, :, :, 1]
+    ΔT = T_ac_map .- T_atm_map
+
+    p1 = heatmap(lon_grid, lat_grid, T_ac_map',
+        xlabel="Longitude (°)", ylabel="Latitude (°)",
+        title="T_ac (K)", color=:thermal,
+        clims=(280.0, 320.0))
+    p2 = heatmap(lon_grid, lat_grid, ΔT',
+        xlabel="Longitude (°)", ylabel="Latitude (°)",
+        title="T_ac − T_atm (K)", color=:RdBu_r,
+        clims=(-10.0, 10.0))
+    plot(p1, p2, layout=(1, 2), size=(900, 400))
+end
+
+gif(anim, fps=15)
+```
