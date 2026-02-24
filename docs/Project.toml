@@ -9,6 +9,7 @@ OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+UrbanCanopy = "d4eb39aa-53a3-45de-9c50-84bd270bed3a"
 
 [compat]
 DataFrames = "1"
