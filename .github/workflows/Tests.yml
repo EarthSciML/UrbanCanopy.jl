@@ -41,14 +41,14 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: "Install custom MethodOfLines.jl fork"
+      - name: "Install custom PDEBase.jl fork"
         run: |
           julia -e '
             using Pkg
             Pkg.activate(".")
-            Pkg.develop(url="https://github.com/ctessum-claude/MethodOfLines.jl.git")
+            Pkg.develop(url="https://github.com/ctessum/PDEBase.jl.git")
           '
-          cd ~/.julia/dev/MethodOfLines && git checkout fix-units-discretization
+          cd ~/.julia/dev/PDEBase && git checkout propagate_kwargs
 
       - uses: julia-actions/julia-buildpkg@v1
 
