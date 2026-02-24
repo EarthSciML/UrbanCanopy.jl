@@ -590,8 +590,8 @@ sol_eg = solve(prob_eg)
 obs_ug = Dict(string(o.lhs) => o.lhs for o in observed(compiled_ug))
 obs_eg = Dict(string(o.lhs) => o.lhs for o in observed(compiled_eg))
 
-z_uniform = [sol_ug[obs_ug["z_node[$i](t)"]][end] for i in 1:N]
-z_exp = [sol_eg[obs_eg["z_node[$i](t)"]][end] for i in 1:N]
+z_uniform = [sol_ug[obs_ug["(z_node(t))[$i]"]][end] for i in 1:N]
+z_exp = [sol_eg[obs_eg["(z_node(t))[$i]"]][end] for i in 1:N]
 
 p = plot(1:N, z_uniform, marker=:circle, label="Uniform (roof/wall)", linewidth=2,
     xlabel="Layer Index", ylabel="Node Depth (m)",
