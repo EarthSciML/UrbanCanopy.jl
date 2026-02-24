@@ -6,21 +6,36 @@ authors = ["EarthSciML authors and contributors"]
 [deps]
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+EarthSciMLBase = "e53f1632-a13c-4728-9402-0c66d48804b0"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
+
+[weakdeps]
+EarthSciData = "a293c155-435f-439d-9c11-a083b6b47337"
+
+[extensions]
+EarthSciDataExt = "EarthSciData"
 
 [compat]
 DomainSets = "0.7"
 DynamicQuantities = "1.4"
+EarthSciData = "0.15"
+EarthSciMLBase = "0.25"
 MethodOfLines = "0.11"
 ModelingToolkit = "11"
 OrdinaryDiffEqDefault = "1.2"
+TestItemRunner = "1.1.4"
 julia = "1.10"
 
 [extras]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+EarthSciData = "a293c155-435f-439d-9c11-a083b6b47337"
+EarthSciMLBase = "e53f1632-a13c-4728-9402-0c66d48804b0"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
 
 [targets]
-test = ["Test", "OrdinaryDiffEqDefault", "TestItemRunner"]
+test = ["Test", "OrdinaryDiffEqDefault", "TestItemRunner", "EarthSciData", "Dates", "EarthSciMLBase", "ModelingToolkit"]
