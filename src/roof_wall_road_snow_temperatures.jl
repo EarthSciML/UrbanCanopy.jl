@@ -836,9 +836,9 @@ thickness, with node depths at layer midpoints and interface depths between laye
     # Note: z_interface has N+1 entries (indices 1 to N+1) corresponding to
     # paper indices i=0,...,N. z_interface[1] = z_{h,0}, z_interface[N+1] = z_{h,N}.
     @variables begin
-        z_node[1:N](t), [description = "Node depth of layer i (Eq. 4.5)", unit = u"m"]
-        Δz_layer[1:N](t), [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
-        z_interface[1:(N + 1)](t), [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
+        z_node(t)[1:N], [description = "Node depth of layer i (Eq. 4.5)", unit = u"m"]
+        Δz_layer(t)[1:N], [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
+        z_interface(t)[1:(N + 1)], [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
     end
 
     eqs = Equation[]
@@ -896,9 +896,9 @@ Layer thicknesses and interface depths are computed from Eqs. 4.6 and 4.7.
     # Note: z_interface has N+1 entries (indices 1 to N+1) corresponding to
     # paper indices i=0,...,N. z_interface[1] = z_{h,0}, z_interface[N+1] = z_{h,N}.
     @variables begin
-        z_node[1:N](t), [description = "Node depth of layer i (Eq. 4.8)", unit = u"m"]
-        Δz_layer[1:N](t), [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
-        z_interface[1:(N + 1)](t), [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
+        z_node(t)[1:N], [description = "Node depth of layer i (Eq. 4.8)", unit = u"m"]
+        Δz_layer(t)[1:N], [description = "Layer thickness (Eq. 4.6)", unit = u"m"]
+        z_interface(t)[1:(N + 1)], [description = "Interface depth (Eq. 4.7); index j maps to paper i=j-1", unit = u"m"]
     end
 
     eqs = Equation[]
@@ -1127,11 +1127,11 @@ function RoofWallHeatConduction(;
     Dzz = Differential(z_var)^2
 
     @parameters begin
-        λ_rw, [description = "Thermal conductivity of roof/wall material", unit = u"W/(m*K)"]
-        c_rw, [description = "Volumetric heat capacity of roof/wall material", unit = u"J/(m^3*K)"]
-        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
-        T_iB, [description = "Internal building temperature at bottom boundary (Eq. 4.37)", unit = u"K"]
-        T_init, [description = "Initial temperature", unit = u"K"]
+        λ_rw = λ_val, [description = "Thermal conductivity of roof/wall material", unit = u"W/(m*K)"]
+        c_rw = c_val, [description = "Volumetric heat capacity of roof/wall material", unit = u"J/(m^3*K)"]
+        h_surface = h_top, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_iB = T_bottom, [description = "Internal building temperature at bottom boundary (Eq. 4.37)", unit = u"K"]
+        T_init = T_bottom, [description = "Initial temperature", unit = u"K"]
     end
 
     # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
@@ -1151,13 +1151,13 @@ function RoofWallHeatConduction(;
 
     @named pdesys = PDESystem(
         eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rw => λ_val, c_rw => c_val, h_surface => h_top, T_iB => T_bottom, T_init => T_bottom]
+        [λ_rw, c_rw, h_surface, T_iB, T_init]
     )
 
     dz = Δz_total / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
 
-    prob = discretize(pdesys, discretization; system_kwargs = [:checks => ~ModelingToolkit.CheckUnits])
+    prob = discretize(pdesys, discretization; checks = ~ModelingToolkit.CheckUnits)
     return (; prob, T, t_pde, z_var)
 end
 
@@ -1200,14 +1200,14 @@ function RoadHeatConduction(;
     Dzz = Differential(z_var)^2
 
     @parameters begin
-        λ_rd, [description = "Thermal conductivity of road material", unit = u"W/(m*K)"]
-        c_rd, [description = "Volumetric heat capacity of road material", unit = u"J/(m^3*K)"]
-        h_surface, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
-        T_init, [description = "Initial temperature", unit = u"K"]
+        λ_rd = λ_val, [description = "Thermal conductivity of road material", unit = u"W/(m*K)"]
+        c_rd = c_val, [description = "Volumetric heat capacity of road material", unit = u"J/(m^3*K)"]
+        h_surface = h_top, [description = "Surface heat flux into top layer (Eq. 4.26)", unit = u"W/m^2"]
+        T_init = T_init_val, [description = "Initial temperature", unit = u"K"]
     end
 
     @parameters begin
-        zero_flux, [description = "Zero heat flux for bottom BC", unit = u"K/m"]
+        zero_flux = 0.0, [description = "Zero heat flux for bottom BC", unit = u"K/m"]
     end
 
     # Eq. 4.4: c * ∂T/∂t = ∂/∂z [λ * ∂T/∂z]
@@ -1226,12 +1226,12 @@ function RoadHeatConduction(;
 
     @named pdesys = PDESystem(
         eq, bcs, domains, [t_pde, z_var], [T(t_pde, z_var)],
-        [λ_rd => λ_val, c_rd => c_val, h_surface => h_top, T_init => T_init_val, zero_flux => 0.0]
+        [λ_rd, c_rd, h_surface, T_init, zero_flux]
     )
 
     dz = z_max / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
 
-    prob = discretize(pdesys, discretization; system_kwargs = [:checks => ~ModelingToolkit.CheckUnits])
+    prob = discretize(pdesys, discretization; checks = ~ModelingToolkit.CheckUnits)
     return (; prob, T, t_pde, z_var)
 end
