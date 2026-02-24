@@ -935,20 +935,20 @@ end
     # Eq. 4.5: z_i = (i - 0.5) * (Δz / N)
     for i in 1:N
         expected_z = (i - 0.5) * (Δz_total / N)
-        @test sol[obs["z_node[$i](t)"]][end] ≈ expected_z rtol = 1.0e-10
+        @test sol[obs["(z_node(t))[$i]"]][end] ≈ expected_z rtol = 1.0e-10
     end
 
     # All layer thicknesses should be equal for uniform grid = Δz_total / N
     expected_Δz = Δz_total / N
     for i in 1:N
-        @test sol[obs["Δz_layer[$i](t)"]][end] ≈ expected_Δz rtol = 1.0e-6
+        @test sol[obs["(Δz_layer(t))[$i]"]][end] ≈ expected_Δz rtol = 1.0e-6
     end
 
     # z_interface[1] = z_{h,0} = 0 (top surface)
-    @test sol[obs["z_interface[1](t)"]][end] ≈ 0.0 atol = 1.0e-12
+    @test sol[obs["(z_interface(t))[1]"]][end] ≈ 0.0 atol = 1.0e-12
 
     # z_interface[N+1] = z_{h,N} = Δz_total (bottom)
-    @test sol[obs["z_interface[$(N + 1)](t)"]][end] ≈ Δz_total rtol = 1.0e-6
+    @test sol[obs["(z_interface(t))[$(N + 1)]"]][end] ≈ Δz_total rtol = 1.0e-6
 end
 
 @testitem "UniformGrid - Node at Midpoint" setup = [TempSetup] tags = [:ch4_temps] begin
@@ -963,9 +963,9 @@ end
 
     # Each node should be at the midpoint of its layer
     for i in 1:N
-        node = sol[obs["z_node[$i](t)"]][end]
-        z_top = sol[obs["z_interface[$i](t)"]][end]
-        z_bot = sol[obs["z_interface[$(i + 1)](t)"]][end]
+        node = sol[obs["(z_node(t))[$i]"]][end]
+        z_top = sol[obs["(z_interface(t))[$i]"]][end]
+        z_bot = sol[obs["(z_interface(t))[$(i + 1)]"]][end]
         midpoint = 0.5 * (z_top + z_bot)
         @test node ≈ midpoint rtol = 1.0e-6
     end
@@ -1001,15 +1001,15 @@ end
     # Eq. 4.8: z_i = f_s * (exp(0.5*(i-0.5)) - 1)
     for i in 1:N
         expected_z = f_s * (exp(0.5 * (i - 0.5)) - 1)
-        @test sol[obs["z_node[$i](t)"]][end] ≈ expected_z rtol = 1.0e-10
+        @test sol[obs["(z_node(t))[$i]"]][end] ≈ expected_z rtol = 1.0e-10
     end
 
     # z_interface[1] = z_{h,0} = 0
-    @test sol[obs["z_interface[1](t)"]][end] ≈ 0.0 atol = 1.0e-12
+    @test sol[obs["(z_interface(t))[1]"]][end] ≈ 0.0 atol = 1.0e-12
 
     # Layer thicknesses should increase with depth (exponential spacing)
     for i in 2:N
-        @test sol[obs["Δz_layer[$i](t)"]][end] > sol[obs["Δz_layer[$(i - 1)](t)"]][end]
+        @test sol[obs["(Δz_layer(t))[$i]"]][end] > sol[obs["(Δz_layer(t))[$(i - 1)]"]][end]
     end
 end
 
@@ -1026,12 +1026,12 @@ end
 
     # Node depths should be monotonically increasing
     for i in 2:N
-        @test sol[obs["z_node[$i](t)"]][end] > sol[obs["z_node[$(i - 1)](t)"]][end]
+        @test sol[obs["(z_node(t))[$i]"]][end] > sol[obs["(z_node(t))[$(i - 1)]"]][end]
     end
 
     # Interface depths should be monotonically increasing
     for i in 2:(N + 1)
-        @test sol[obs["z_interface[$i](t)"]][end] > sol[obs["z_interface[$(i - 1)](t)"]][end]
+        @test sol[obs["(z_interface(t))[$i]"]][end] > sol[obs["(z_interface(t))[$(i - 1)]"]][end]
     end
 end
 
