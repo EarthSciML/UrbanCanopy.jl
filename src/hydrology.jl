@@ -678,7 +678,7 @@ function RichardsEquation(;
     dz = Δz_total / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
 
-    prob = discretize(pdesys, discretization)
+    prob = discretize(pdesys, discretization; system_kwargs = [:checks => ~ModelingToolkit.CheckUnits])
     return (; prob, θ, t_pde, z_var, k_sat_val, θ_sat_val, B_val, ψ_sat_val)
 end
 

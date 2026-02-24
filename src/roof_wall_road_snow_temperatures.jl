@@ -1157,7 +1157,7 @@ function RoofWallHeatConduction(;
     dz = Δz_total / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
 
-    prob = discretize(pdesys, discretization)
+    prob = discretize(pdesys, discretization; system_kwargs = [:checks => ~ModelingToolkit.CheckUnits])
     return (; prob, T, t_pde, z_var)
 end
 
@@ -1232,6 +1232,6 @@ function RoadHeatConduction(;
     dz = z_max / N_layers
     discretization = MOLFiniteDifference([z_var => dz], t_pde; approx_order = 2)
 
-    prob = discretize(pdesys, discretization)
+    prob = discretize(pdesys, discretization; system_kwargs = [:checks => ~ModelingToolkit.CheckUnits])
     return (; prob, T, t_pde, z_var)
 end
