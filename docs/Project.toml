@@ -16,7 +16,7 @@ UrbanCanopy = "d4eb39aa-53a3-45de-9c50-84bd270bed3a"
 [compat]
 DataFrames = "1"
 Documenter = "1"
-DomainSets = "0.7"
+DomainSets = "0.7, 0.8"
 DynamicQuantities = "1"
 EarthSciData = "0.15"
 EarthSciMLBase = "0.25"
