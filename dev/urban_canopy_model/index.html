@@ -282,7 +282,7 @@ for hw in H_W_vals
     plot!(p, T_atm_range, T_ac_vals, label=&quot;H/W = $hw&quot;, linewidth=2)
 end
 
-p</code></pre><img src="3dda10a8.svg" alt="Example block output"/><h3 id="Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature"><a class="docs-heading-anchor" href="#Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature">Diurnal Cycle Heat Map of UCL Air Temperature</a><a id="Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature-1"></a><a class="docs-heading-anchor-permalink" href="#Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature" title="Permalink"></a></h3><p>This example creates a spatial heat map showing how T_ac varies over a grid as solar radiation changes through the day. The grid represents spatial variation in atmospheric temperature (latitude axis) and urban density (longitude axis, via H/W ratio).</p><pre><code class="language-julia hljs">T_atm_grid = 290.0:2.0:310.0  # Temperature gradient (rows)
+p</code></pre><img src="d5e80954.svg" alt="Example block output"/><h3 id="Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature"><a class="docs-heading-anchor" href="#Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature">Diurnal Cycle Heat Map of UCL Air Temperature</a><a id="Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature-1"></a><a class="docs-heading-anchor-permalink" href="#Diurnal-Cycle-Heat-Map-of-UCL-Air-Temperature" title="Permalink"></a></h3><p>This example creates a spatial heat map showing how T_ac varies over a grid as solar radiation changes through the day. The grid represents spatial variation in atmospheric temperature (latitude axis) and urban density (longitude axis, via H/W ratio).</p><pre><code class="language-julia hljs">T_atm_grid = 290.0:2.0:310.0  # Temperature gradient (rows)
 H_W_grid = 0.3:0.1:2.0        # Urban density gradient (columns)
 
 # Simulate a diurnal cycle by varying S_atm (solar radiation proxy)
@@ -321,7 +321,98 @@ csys = couple(
     domain,
 )
 
-coupled_sys = convert(System, csys)</code></pre><h4 id="Coupling-Equations"><a class="docs-heading-anchor" href="#Coupling-Equations">Coupling Equations</a><a id="Coupling-Equations-1"></a><a class="docs-heading-anchor-permalink" href="#Coupling-Equations" title="Permalink"></a></h4><p>The coupling creates observed equations that map GEOS-FP meteorological variables to the <code>UrbanCanopyModel</code> forcing parameters. Below we extract the top-level coupling equations showing how each GEOS-FP field drives the urban canopy model.</p><pre><code class="language-julia hljs">obs = observed(coupled_sys)
+coupled_sys = convert(System, csys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Creating directory /home/runner/.julia/scratchspaces/a293c155-435f-439d-9c11-a083b6b47337/earthsci_data/https_geos-chem.s3-us-west-2.amazonaws.com/GEOS_4x5/GEOS_FP/2016/04
+Downloading GEOSFP.20160430.A1.4x5.nc:   0%|            |  ETA: 0:15:41Downloading GEOSFP.20160430.A1.4x5.nc:   7%|▉           |  ETA: 0:00:33Downloading GEOSFP.20160430.A1.4x5.nc:  25%|███         |  ETA: 0:00:08Downloading GEOSFP.20160430.A1.4x5.nc:  98%|███████████▊|  ETA: 0:00:00Downloading GEOSFP.20160430.A1.4x5.nc: 100%|████████████| Time: 0:00:02
+Downloading GEOSFP.20160430.A1.4x5.nc: 100%|████████████| Time: 0:00:02
+Downloading GEOSFP.20160430.A1.4x5.nc: 100%|████████████| Time: 0:00:02
+[ Info: Creating directory /home/runner/.julia/scratchspaces/a293c155-435f-439d-9c11-a083b6b47337/earthsci_data/https_geos-chem.s3-us-west-2.amazonaws.com/GEOS_4x5/GEOS_FP/2016/05
+Downloading GEOSFP.20160501.A1.4x5.nc:   0%|            |  ETA: 0:01:19Downloading GEOSFP.20160501.A1.4x5.nc:  80%|█████████▋  |  ETA: 0:00:00Downloading GEOSFP.20160501.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A1.4x5.nc:   0%|            |  ETA: 0:00:39Downloading GEOSFP.20160502.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A1.4x5.nc:   0%|            |  ETA: N/ADownloading GEOSFP.20160503.A1.4x5.nc:  96%|███████████▌|  ETA: 0:00:00Downloading GEOSFP.20160503.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A1.4x5.nc:   0%|            |  ETA: N/ADownloading GEOSFP.20160504.A1.4x5.nc:  99%|████████████|  ETA: 0:00:00Downloading GEOSFP.20160504.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A1.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3cld.4x5.nc:   0%|         |  ETA: 0:05:14Downloading GEOSFP.20160430.A3cld.4x5.nc:   0%|         |  ETA: 0:01:44Downloading GEOSFP.20160430.A3cld.4x5.nc:   2%|▎        |  ETA: 0:00:26Downloading GEOSFP.20160430.A3cld.4x5.nc:  10%|▉        |  ETA: 0:00:06Downloading GEOSFP.20160430.A3cld.4x5.nc:  39%|███▌     |  ETA: 0:00:01Downloading GEOSFP.20160430.A3cld.4x5.nc:  55%|█████    |  ETA: 0:00:01Downloading GEOSFP.20160430.A3cld.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160430.A3cld.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160430.A3cld.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160501.A3cld.4x5.nc:   0%|         |  ETA: 0:01:03Downloading GEOSFP.20160501.A3cld.4x5.nc:  46%|████▏    |  ETA: 0:00:00Downloading GEOSFP.20160501.A3cld.4x5.nc:  55%|█████    |  ETA: 0:00:00Downloading GEOSFP.20160501.A3cld.4x5.nc:  99%|████████▉|  ETA: 0:00:00Downloading GEOSFP.20160501.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3cld.4x5.nc:   0%|         |  ETA: 0:02:25Downloading GEOSFP.20160502.A3cld.4x5.nc:  51%|████▋    |  ETA: 0:00:00Downloading GEOSFP.20160502.A3cld.4x5.nc:  55%|█████    |  ETA: 0:00:00Downloading GEOSFP.20160502.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3cld.4x5.nc:   1%|         |  ETA: 0:00:34Downloading GEOSFP.20160503.A3cld.4x5.nc:  43%|███▉     |  ETA: 0:00:00Downloading GEOSFP.20160503.A3cld.4x5.nc:  56%|█████    |  ETA: 0:00:00Downloading GEOSFP.20160503.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3cld.4x5.nc:   1%|         |  ETA: 0:00:28Downloading GEOSFP.20160504.A3cld.4x5.nc:  23%|██▏      |  ETA: 0:00:01Downloading GEOSFP.20160504.A3cld.4x5.nc:  31%|██▉      |  ETA: 0:00:01Downloading GEOSFP.20160504.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3cld.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3dyn.4x5.nc:   0%|         |  ETA: N/ADownloading GEOSFP.20160430.A3dyn.4x5.nc:  28%|██▌      |  ETA: 0:00:01Downloading GEOSFP.20160430.A3dyn.4x5.nc:  44%|████     |  ETA: 0:00:01Downloading GEOSFP.20160430.A3dyn.4x5.nc:  60%|█████▍   |  ETA: 0:00:00Downloading GEOSFP.20160430.A3dyn.4x5.nc:  88%|████████ |  ETA: 0:00:00Downloading GEOSFP.20160430.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3dyn.4x5.nc:   0%|         |  ETA: 0:01:08Downloading GEOSFP.20160501.A3dyn.4x5.nc:  28%|██▋      |  ETA: 0:00:01Downloading GEOSFP.20160501.A3dyn.4x5.nc:  44%|████     |  ETA: 0:00:01Downloading GEOSFP.20160501.A3dyn.4x5.nc:  60%|█████▍   |  ETA: 0:00:00Downloading GEOSFP.20160501.A3dyn.4x5.nc:  84%|███████▋ |  ETA: 0:00:00Downloading GEOSFP.20160501.A3dyn.4x5.nc:  90%|████████▏|  ETA: 0:00:00Downloading GEOSFP.20160501.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3dyn.4x5.nc:   0%|         |  ETA: 0:00:53Downloading GEOSFP.20160502.A3dyn.4x5.nc:  26%|██▍      |  ETA: 0:00:01Downloading GEOSFP.20160502.A3dyn.4x5.nc:  30%|██▊      |  ETA: 0:00:01Downloading GEOSFP.20160502.A3dyn.4x5.nc:  58%|█████▎   |  ETA: 0:00:00Downloading GEOSFP.20160502.A3dyn.4x5.nc:  60%|█████▍   |  ETA: 0:00:00Downloading GEOSFP.20160502.A3dyn.4x5.nc:  88%|████████ |  ETA: 0:00:00Downloading GEOSFP.20160502.A3dyn.4x5.nc:  94%|████████▍|  ETA: 0:00:00Downloading GEOSFP.20160502.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3dyn.4x5.nc:   0%|         |  ETA: 0:01:02Downloading GEOSFP.20160503.A3dyn.4x5.nc:  28%|██▌      |  ETA: 0:00:01Downloading GEOSFP.20160503.A3dyn.4x5.nc:  44%|████     |  ETA: 0:00:01Downloading GEOSFP.20160503.A3dyn.4x5.nc:  60%|█████▍   |  ETA: 0:00:00Downloading GEOSFP.20160503.A3dyn.4x5.nc:  88%|███████▉ |  ETA: 0:00:00Downloading GEOSFP.20160503.A3dyn.4x5.nc:  90%|████████▏|  ETA: 0:00:00Downloading GEOSFP.20160503.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3dyn.4x5.nc:   0%|         |  ETA: 0:00:48Downloading GEOSFP.20160504.A3dyn.4x5.nc:  23%|██▏      |  ETA: 0:00:01Downloading GEOSFP.20160504.A3dyn.4x5.nc:  28%|██▌      |  ETA: 0:00:01Downloading GEOSFP.20160504.A3dyn.4x5.nc:  37%|███▍     |  ETA: 0:00:01Downloading GEOSFP.20160504.A3dyn.4x5.nc:  58%|█████▎   |  ETA: 0:00:00Downloading GEOSFP.20160504.A3dyn.4x5.nc:  70%|██████▎  |  ETA: 0:00:00Downloading GEOSFP.20160504.A3dyn.4x5.nc:  88%|███████▉ |  ETA: 0:00:00Downloading GEOSFP.20160504.A3dyn.4x5.nc:  95%|████████▌|  ETA: 0:00:00Downloading GEOSFP.20160504.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160504.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160504.A3dyn.4x5.nc: 100%|█████████| Time: 0:00:01
+Downloading GEOSFP.20160430.A3mstC.4x5.nc:   1%|▏       |  ETA: 0:00:19Downloading GEOSFP.20160430.A3mstC.4x5.nc:  99%|███████▉|  ETA: 0:00:00Downloading GEOSFP.20160430.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstC.4x5.nc:   0%|        |  ETA: 0:01:17Downloading GEOSFP.20160501.A3mstC.4x5.nc:  98%|███████▉|  ETA: 0:00:00Downloading GEOSFP.20160501.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstC.4x5.nc:   0%|        |  ETA: N/ADownloading GEOSFP.20160502.A3mstC.4x5.nc:  89%|███████▏|  ETA: 0:00:00Downloading GEOSFP.20160502.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstC.4x5.nc:   0%|        |  ETA: N/ADownloading GEOSFP.20160503.A3mstC.4x5.nc:  52%|████▏   |  ETA: 0:00:00Downloading GEOSFP.20160503.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstC.4x5.nc:   1%|▏       |  ETA: 0:00:20Downloading GEOSFP.20160504.A3mstC.4x5.nc:  99%|███████▉|  ETA: 0:00:00Downloading GEOSFP.20160504.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstC.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3mstE.4x5.nc:   1%|        |  ETA: 0:00:28Downloading GEOSFP.20160430.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstE.4x5.nc:   1%|▏       |  ETA: 0:00:11Downloading GEOSFP.20160501.A3mstE.4x5.nc:  87%|███████ |  ETA: 0:00:00Downloading GEOSFP.20160501.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160501.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstE.4x5.nc:   1%|▏       |  ETA: 0:00:19Downloading GEOSFP.20160502.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160502.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstE.4x5.nc:   0%|        |  ETA: N/ADownloading GEOSFP.20160503.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160503.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstE.4x5.nc:   1%|▏       |  ETA: 0:00:12Downloading GEOSFP.20160504.A3mstE.4x5.nc:  52%|████▏   |  ETA: 0:00:00Downloading GEOSFP.20160504.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160504.A3mstE.4x5.nc: 100%|████████| Time: 0:00:00
+Downloading GEOSFP.20160430.I3.4x5.nc:   0%|            |  ETA: N/ADownloading GEOSFP.20160430.I3.4x5.nc:  38%|████▋       |  ETA: 0:00:00Downloading GEOSFP.20160430.I3.4x5.nc:  52%|██████▎     |  ETA: 0:00:00Downloading GEOSFP.20160430.I3.4x5.nc:  86%|██████████▎ |  ETA: 0:00:00Downloading GEOSFP.20160430.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160430.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160430.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160501.I3.4x5.nc:   0%|            |  ETA: 0:00:35Downloading GEOSFP.20160501.I3.4x5.nc:  43%|█████▏      |  ETA: 0:00:00Downloading GEOSFP.20160501.I3.4x5.nc:  65%|███████▉    |  ETA: 0:00:00Downloading GEOSFP.20160501.I3.4x5.nc:  89%|██████████▋ |  ETA: 0:00:00Downloading GEOSFP.20160501.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160501.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160501.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.I3.4x5.nc:   0%|            |  ETA: 0:00:53Downloading GEOSFP.20160502.I3.4x5.nc:  42%|█████       |  ETA: 0:00:00Downloading GEOSFP.20160502.I3.4x5.nc:  65%|███████▊    |  ETA: 0:00:00Downloading GEOSFP.20160502.I3.4x5.nc:  89%|██████████▋ |  ETA: 0:00:00Downloading GEOSFP.20160502.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160502.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.I3.4x5.nc:   0%|            |  ETA: 0:00:38Downloading GEOSFP.20160503.I3.4x5.nc:  37%|████▍       |  ETA: 0:00:00Downloading GEOSFP.20160503.I3.4x5.nc:  44%|█████▍      |  ETA: 0:00:00Downloading GEOSFP.20160503.I3.4x5.nc:  86%|██████████▎ |  ETA: 0:00:00Downloading GEOSFP.20160503.I3.4x5.nc:  88%|██████████▋ |  ETA: 0:00:00Downloading GEOSFP.20160503.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160503.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.I3.4x5.nc:   0%|            |  ETA: N/ADownloading GEOSFP.20160504.I3.4x5.nc:  35%|████▎       |  ETA: 0:00:01Downloading GEOSFP.20160504.I3.4x5.nc:  44%|█████▎      |  ETA: 0:00:01Downloading GEOSFP.20160504.I3.4x5.nc:  84%|██████████  |  ETA: 0:00:00Downloading GEOSFP.20160504.I3.4x5.nc:  89%|██████████▋ |  ETA: 0:00:00Downloading GEOSFP.20160504.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.I3.4x5.nc: 100%|████████████| Time: 0:00:00
+Downloading GEOSFP.20160504.I3.4x5.nc: 100%|████████████| Time: 0:00:00</code></pre><h4 id="Coupling-Equations"><a class="docs-heading-anchor" href="#Coupling-Equations">Coupling Equations</a><a id="Coupling-Equations-1"></a><a class="docs-heading-anchor-permalink" href="#Coupling-Equations" title="Permalink"></a></h4><p>The coupling creates observed equations that map GEOS-FP meteorological variables to the <code>UrbanCanopyModel</code> forcing parameters. Below we extract the top-level coupling equations showing how each GEOS-FP field drives the urban canopy model.</p><pre><code class="language-julia hljs">obs = observed(coupled_sys)
 
 # Extract the top-level coupling equations (UrbanCanopyModel parameters driven by GEOS-FP)
 coupling_terms = [&quot;S_atm&quot;, &quot;T_atm&quot;, &quot;P_atm&quot;, &quot;q_atm&quot;, &quot;W_atm&quot;, &quot;P_precip&quot;, &quot;ζ_in&quot;, &quot;μ_zen&quot;]
@@ -346,4 +437,4 @@ DataFrame(
     :Name =&gt; [string(Symbolics.tosymbol(v, escape=false)) for v in coupled_vars],
     :Units =&gt; [dimension(ModelingToolkit.get_unit(v)) for v in coupled_vars],
     :Description =&gt; [ModelingToolkit.getdescription(v) for v in coupled_vars]
-)</code></pre><div><div style = "float: left;"><span>0×3 DataFrame</span></div><div style = "clear: both;"></div></div><div class = "data-frame" style = "overflow-x: scroll;"><table class = "data-frame" style = "margin-bottom: 6px;"><thead><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;">Row</th><th style = "text-align: left;">Name</th><th style = "text-align: left;">Units</th><th style = "text-align: left;">Description</th></tr><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;"></th><th title = "Any" style = "text-align: left;">Any</th><th title = "Any" style = "text-align: left;">Any</th><th title = "Any" style = "text-align: left;">Any</th></tr></thead></table></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../hydrology/">« Hydrology</a><a class="docs-footer-nextpage" href="../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Friday 20 November 2026 08:39">Friday 20 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+)</code></pre><div><div style = "float: left;"><span>0×3 DataFrame</span></div><div style = "clear: both;"></div></div><div class = "data-frame" style = "overflow-x: scroll;"><table class = "data-frame" style = "margin-bottom: 6px;"><thead><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;">Row</th><th style = "text-align: left;">Name</th><th style = "text-align: left;">Units</th><th style = "text-align: left;">Description</th></tr><tr class = "columnLabelRow"><th class = "stubheadLabel" style = "font-weight: bold; text-align: right;"></th><th title = "Any" style = "text-align: left;">Any</th><th title = "Any" style = "text-align: left;">Any</th><th title = "Any" style = "text-align: left;">Any</th></tr></thead></table></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../hydrology/">« Hydrology</a><a class="docs-footer-nextpage" href="../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.20.0 on <span class="colophon-date" title="Friday 27 November 2026 09:58">Friday 27 November 2026</span>. Using Julia version 1.13.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
